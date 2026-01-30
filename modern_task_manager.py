@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QFrame, QSizeGrip, QGraphicsDropShadowEffect, QDialog, QTextEdit, QSizePolicy,
     QCalendarWidget, QDateEdit, QSystemTrayIcon, QTableView, QAbstractItemView, QLayout
 )
-from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, Property, QStandardPaths, QDate, QSize
+from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, Property, QStandardPaths, QDate, QSize, QTimer, QByteArray
 from PySide6.QtGui import (
     QIcon, QFont, QColor, QPalette, QLinearGradient, QGradient, 
     QPainter, QPen, QBrush, QCursor, QAction, QPixmap
@@ -283,6 +283,8 @@ class Task:
     created: str
     repeat_type: Optional[str] = None  # "daily", "weekly", "monthly" или None
     last_repeated_date: Optional[str] = None  # Дата последнего повторения в формате "yyyy-MM-dd"
+    time_spent: int = 0  # Время выполнения в секундах
+    is_running: bool = False  # Флаг запущенного таймера
 
 
 class TaskStorage:
@@ -303,6 +305,13 @@ class TaskStorage:
                         item["repeat_type"] = None
                     if "last_repeated_date" not in item:
                         item["last_repeated_date"] = None
+                    if "time_spent" not in item:
+                        item["time_spent"] = 0
+                    if "is_running" not in item:
+                        item["is_running"] = False
+                    else:
+                         # Сбрасываем флаг запуска при старте (на случай аварийного закрытия)
+                         item["is_running"] = False
                     tasks.append(Task(**item))
                 return tasks
         except Exception as e:
@@ -824,28 +833,27 @@ class MinimizeButton(QPushButton):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.TextAntialiasing)
         
-        # Фон (Желтый/Оранжевый)
         rect = self.rect()
-        if self.isDown():
-            color = QColor(255, 193, 61, 200)
-        elif self.underMouse():
-            color = QColor(255, 193, 61, 128)
-        else:
-            color = QColor(255, 193, 61, 76)
-            
-        painter.setBrush(color)
-        painter.setPen(Qt.NoPen)
-        # Отступ 2 пикселя
-        painter.drawEllipse(rect.adjusted(2, 2, -2, -2))
         
-        # Черточка
-        painter.setPen(QPen(QColor(255, 255, 255), 2.5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        # Желтый кружок только при наведении
+        if self.underMouse():
+            if self.isDown():
+                color = QColor(255, 193, 61, 200)
+            else:
+                color = QColor(255, 193, 61, 128)
+            painter.setBrush(color)
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(rect.adjusted(2, 2, -2, -2))
         
-        cx, cy = float(rect.width()) / 2.0, float(rect.height()) / 2.0
-        offset = 5.0
-        
-        painter.drawLine(cx - offset, cy, cx + offset, cy)
+        # Белый шеврон вниз
+        painter.setPen(QColor(255, 255, 255))
+        font = QFont("Segoe UI", 12, QFont.Bold)
+        painter.setFont(font)
+        # Смещаем вверх на 4px для выравнивания с крестиком
+        adjusted_rect = rect.adjusted(0, -4, 0, -4)
+        painter.drawText(adjusted_rect, Qt.AlignCenter, "⌄")
 
 class TaskDialog(DraggableDialog):
     """Диалог для создания/редактирования задачи"""
@@ -1775,24 +1783,97 @@ class TaskCard(QFrame):
         actions_layout = QHBoxLayout()
         actions_layout.setSpacing(4)
         
-        # Кнопка редактирования
-        edit_btn = QPushButton("✏️")
-        edit_btn.setFixedSize(28, 28)
-        edit_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        edit_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255, 193, 61, 0.3);
-                border: none;
-                border-radius: 14px;
-                color: #ffc13d;
+        # Контейнер для элементов таймера
+        self.timer_controls_container = QWidget()
+        timer_controls_layout = QHBoxLayout(self.timer_controls_container)
+        timer_controls_layout.setContentsMargins(0, 0, 0, 0)
+        timer_controls_layout.setSpacing(4)
+        
+        # Таймер и кнопка Play
+        self.time_label = QLabel(self._format_time(self.task.time_spent))
+        self.time_label.setFont(ZoomManager.font("Consolas", 10)) # Моноширинный шрифт для цифр
+        self.time_label.setStyleSheet(f"color: {THEME['text_secondary']}; margin-right: 5px;")
+        
+        self.play_btn = QPushButton()
+        self.play_btn.setFixedSize(28, 28)
+        self.play_btn.setText("⏯️" if self.task.is_running else "▶️")  # ⏯️ для паузы, ▶️ для play
+        self.play_btn.setToolTip("Пауза" if self.task.is_running else "Запустить")
+        self.play_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.play_btn.setAttribute(Qt.WA_TransparentForMouseEvents, False)  # Предотвращаем проброс событий
+        self.play_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                border: 1px solid {THEME['border_color']};
+                color: {THEME['accent_text'] if self.task.is_running else THEME['text_secondary']};
                 font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 193, 61, 0.5);
-            }
+                border-radius: 14px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+                color: {THEME['accent_text']};
+            }}
         """)
-        edit_btn.clicked.connect(self._edit_task)
-        actions_layout.addWidget(edit_btn)
+        self.play_btn.clicked.connect(self._toggle_timer)
+        
+        timer_controls_layout.addWidget(self.time_label)
+        timer_controls_layout.addWidget(self.play_btn)
+        
+        # Кнопка сброса таймера
+        reset_btn = QPushButton("🔄")  # Круговая стрелка
+        reset_btn.setFixedSize(28, 28)
+        reset_btn.setToolTip("Сбросить таймер")
+        reset_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        reset_btn.setAttribute(Qt.WA_TransparentForMouseEvents, False)  # Предотвращаем проброс событий
+        reset_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                border: 1px solid {THEME['border_color']};
+                color: {THEME['text_secondary']};
+                font-size: 16px;
+                border-radius: 14px;
+                padding-bottom: 2px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+                color: {THEME['text_primary']};
+            }}
+        """)
+        reset_btn.clicked.connect(self._reset_timer)
+        timer_controls_layout.addWidget(reset_btn)
+        
+        # Скрываем контейнер по умолчанию
+        self.timer_controls_container.setVisible(False)
+        actions_layout.addWidget(self.timer_controls_container)
+        
+        # Кнопка-переключатель таймера
+        self.toggle_timer_btn = QPushButton("⏱️")
+        self.toggle_timer_btn.setFixedSize(28, 28)
+        self.toggle_timer_btn.setToolTip("Показать таймер")
+        self.toggle_timer_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.toggle_timer_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                border: 1px solid {THEME['border_color']};
+                color: {THEME['text_secondary']};
+                font-size: 14px;
+                border-radius: 14px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+                color: {THEME['text_primary']};
+            }}
+        """)
+        self.toggle_timer_btn.clicked.connect(self._toggle_timer_controls)
+        actions_layout.addWidget(self.toggle_timer_btn)
+        
+        # Разделитель
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setFixedWidth(1)
+        separator.setFixedHeight(20)
+        separator.setStyleSheet(f"background-color: {THEME['border_color']}; border: none;")
+        actions_layout.addWidget(separator)
         
         # Чекбокс выполнения
         self.checkbox = QPushButton("✓" if self.task.status == "Выполнено" else "")
@@ -1883,6 +1964,67 @@ class TaskCard(QFrame):
             dialog.exec()
             event.accept()
     
+    def _toggle_timer(self):
+        """Переключение таймера"""
+        self.parent_window.toggle_task_timer(self.task.id)
+
+    def update_time_display(self, seconds):
+        """Обновление отображения времени"""
+        self.time_label.setText(self._format_time(seconds))
+    
+    def update_timer_state(self, is_running):
+        """Обновление состояния кнопки таймера"""
+        self.play_btn.setText("⏯️" if is_running else "▶️")
+        self.play_btn.setToolTip("Пауза" if is_running else "Запустить")
+        
+    def _format_time(self, seconds):
+        """Форматирование времени в ЧЧ:ММ:СС"""
+        m, s = divmod(seconds, 60)
+        h, m = divmod(m, 60)
+        if h > 0:
+            return f"{h}:{m:02d}:{s:02d}"
+        else:
+            return f"{m:02d}:{s:02d}"
+
+    def _reset_timer(self):
+        """Сброс таймера"""
+        if self.parent_window:
+            self.parent_window.reset_task_timer(self.task.id)
+    
+    def _toggle_timer_controls(self):
+        """Переключение видимости панели таймера"""
+        is_visible = self.timer_controls_container.isVisible()
+        self.timer_controls_container.setVisible(not is_visible)
+        
+        # Обновляем стиль кнопки
+        if not is_visible:
+            self.toggle_timer_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {THEME['accent_bg']};
+                    border: 1px solid {THEME['accent_hover']};
+                    color: {THEME['accent_text']};
+                    font-size: 14px;
+                    border-radius: 14px;
+                }}
+            """)
+            self.toggle_timer_btn.setToolTip("Скрыть таймер")
+        else:
+            self.toggle_timer_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    border: 1px solid {THEME['border_color']};
+                    color: {THEME['text_secondary']};
+                    font-size: 14px;
+                    border-radius: 14px;
+                }}
+                QPushButton:hover {{
+                    background-color: {THEME['secondary_hover']};
+                    color: {THEME['text_primary']};
+                }}
+            """)
+            self.toggle_timer_btn.setToolTip("Показать таймер")
+
+
     def _edit_task(self):
         """Открыть диалог редактирования"""
         if self.parent_window:
@@ -1959,6 +2101,7 @@ class TaskCard(QFrame):
             self.priority_label.setFont(ZoomManager.font("Segoe UI", 8))
         if hasattr(self, 'date_label') and self.date_label:
             self.date_label.setFont(ZoomManager.font("Segoe UI", 8))
+
 
 
 class SliderPopup(QDialog):
@@ -2045,6 +2188,11 @@ class ModernTaskManager(QMainWindow):
         self.drag_position = None
         self.selected_date = QDate.currentDate() # Текущая выбранная дата
         
+        # Таймер для трекинга времени
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._update_timers)
+        self.timer.start(1000) # Обновление каждую секунду
+        
         # Сначала создаем UI, потом загружаем задачи
         self._setup_ui()
         self._load_tasks()
@@ -2066,17 +2214,40 @@ class ModernTaskManager(QMainWindow):
             Qt.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setWindowOpacity(0.96)
         
-    def _show_opacity_menu(self):
-        """Отображение меню прозрачности сверху"""
-        # Вычисляем позицию: глобальная позиция кнопки минус высота меню
-        btn_pos = self.opacity_btn.mapToGlobal(QPoint(0, 0))
-        menu_height = self.opacity_menu.sizeHint().height()
-        # Немного смещаем вверх (на высоту меню)
-        show_pos = btn_pos - QPoint(0, menu_height)
+        # Восстановление состояния окна
+        saved_geometry = SettingsManager.get("window_geometry")
+        if saved_geometry:
+            try:
+                self.restoreGeometry(QByteArray.fromBase64(saved_geometry.encode()))
+            except Exception as e:
+                print(f"Ошибка восстановления геометрии: {e}")
+                self.resize(460, 600)
+        else:
+            self.resize(460, 600)
+            
+        # Восстановление масштаба
+        saved_scale = SettingsManager.get("ui_scale", 1.0)
+        if saved_scale != 1.0:
+             ZoomManager.set_scale(saved_scale)
+             
+        # Восстановление прозрачности
+        saved_opacity = SettingsManager.get("window_opacity", 0.96)
+        self.setWindowOpacity(saved_opacity)
         
-        self.opacity_menu.exec(show_pos)
+    def closeEvent(self, event):
+        """Обработка закрытия окна"""
+        # Сохранение состояния
+        try:
+            geometry = self.saveGeometry().toBase64().data().decode()
+            SettingsManager.set("window_geometry", geometry)
+            SettingsManager.set("ui_scale", ZoomManager.get_scale())
+            SettingsManager.set("window_opacity", self.windowOpacity())
+        except Exception as e:
+            print(f"Ошибка сохранения состояния: {e}")
+            
+        super().closeEvent(event)
+
         
     def _setup_ui(self):
         """Настройка интерфейса"""
@@ -2128,26 +2299,7 @@ class ModernTaskManager(QMainWindow):
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
         
-        # Кнопка информации (О программе)
-        self.about_btn = QPushButton("❓")
-        self.about_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.about_btn.setToolTip("О программе")
-        self.about_btn.setFixedSize(28, 28)
-        self.about_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: transparent;
-                border: none;
-                color: {THEME['text_secondary']};
-                font-size: 16px;
-                border-radius: 14px;
-            }}
-            QPushButton:hover {{
-                background-color: {THEME['secondary_hover']};
-                color: {THEME['text_primary']};
-            }}
-        """)
-        self.about_btn.clicked.connect(self._show_about)
-        header_layout.addWidget(self.about_btn)
+
         
         # Кнопка сворачивания
         self.minimize_btn = MinimizeButton()
@@ -2344,6 +2496,13 @@ class ModernTaskManager(QMainWindow):
         
         # --- Кнопки управления (Шрифт и Прозрачность) ---
         
+        # Контейнер для инструментов (скрыт по умолчанию)
+        self.tools_container = QFrame()
+        self.tools_container.setVisible(False) # Скрыто по умолчанию
+        tools_layout = QHBoxLayout(self.tools_container)
+        tools_layout.setContentsMargins(0, 0, 0, 0)
+        tools_layout.setSpacing(8)
+        
         # 1. Шрифт
         self.zoom_btn = QPushButton("Aa")
         self.zoom_btn.setFixedSize(32, 32)
@@ -2364,7 +2523,7 @@ class ModernTaskManager(QMainWindow):
             }}
         """)
         self.zoom_btn.clicked.connect(self._show_zoom_slider)
-        bottom_layout.addWidget(self.zoom_btn)
+        tools_layout.addWidget(self.zoom_btn)
         
         # 2. Прозрачность
         self.opacity_btn = QPushButton("💧")
@@ -2385,14 +2544,14 @@ class ModernTaskManager(QMainWindow):
             }}
         """)
         self.opacity_btn.clicked.connect(self._show_opacity_slider)
-        bottom_layout.addWidget(self.opacity_btn)
+        tools_layout.addWidget(self.opacity_btn)
         
         # Разделитель
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
         sep.setFixedSize(1, 20)
         sep.setStyleSheet(f"background-color: {THEME['border_color']}; border: none;")
-        bottom_layout.addWidget(sep)
+        tools_layout.addWidget(sep)
         
         # Кнопка минималистичного режима
         self.minimal_mode_btn = QPushButton("≡")
@@ -2418,7 +2577,7 @@ class ModernTaskManager(QMainWindow):
             }}
         """)
         self.minimal_mode_btn.clicked.connect(self._toggle_minimal_mode)
-        bottom_layout.addWidget(self.minimal_mode_btn)
+        tools_layout.addWidget(self.minimal_mode_btn)
         
         # Кнопка включения/выключения звуков
         # Загружаем состояние звуков из настроек
@@ -2447,7 +2606,7 @@ class ModernTaskManager(QMainWindow):
             }}
         """)
         self.sound_btn.clicked.connect(self._toggle_sounds)
-        bottom_layout.addWidget(self.sound_btn)
+        tools_layout.addWidget(self.sound_btn)
         
         # Кнопка закрепления (Always on Top)
         self.pin_btn = QPushButton("📌")
@@ -2474,7 +2633,7 @@ class ModernTaskManager(QMainWindow):
             }}
         """)
         self.pin_btn.clicked.connect(self._toggle_pin)
-        bottom_layout.addWidget(self.pin_btn)
+        tools_layout.addWidget(self.pin_btn)
         
         # Кнопка смены темы (Акцентный цвет)
         self.theme_btn = QPushButton("🎨")
@@ -2494,9 +2653,82 @@ class ModernTaskManager(QMainWindow):
                 color: {THEME['text_primary']};
             }}
         """)
-        self.theme_btn.clicked.connect(self._cycle_theme)
-        bottom_layout.addWidget(self.theme_btn)
+        self.theme_btn.clicked.connect(self._show_theme_menu)
+        tools_layout.addWidget(self.theme_btn)
         
+
+
+
+        # Кнопка справки (Слева от обновления)
+        self.help_btn = QPushButton("❓")
+        self.help_btn.setFixedSize(32, 32)
+        self.help_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.help_btn.setToolTip("О программе")
+        self.help_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: #ff4d4d;
+                border: 1px solid {THEME['border_color']};
+                border-radius: 16px; 
+                font-size: 18px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+                border-color: #ff4d4d;
+            }}
+        """)
+        self.help_btn.clicked.connect(self._show_about)
+        bottom_layout.addWidget(self.help_btn)
+
+        # Кнопка проверки обновлений
+        self.update_btn = QPushButton("🔄")
+        self.update_btn.setFixedSize(32, 32)
+        self.update_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.update_btn.setToolTip("Проверить обновления")
+        self.update_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {THEME['text_secondary']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 16px; 
+                font-size: 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+                color: {THEME['text_primary']};
+                border-color: {THEME['accent_hover']};
+            }}
+        """)
+        self.update_btn.clicked.connect(self._check_updates)
+        bottom_layout.addWidget(self.update_btn)
+
+        # Кнопка переключения инструментов (Слева)
+        self.toggle_tools_btn = QPushButton("🛠️")
+        self.toggle_tools_btn.setFixedSize(32, 32)
+        self.toggle_tools_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.toggle_tools_btn.setToolTip("Показать инструменты")
+        self.toggle_tools_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {THEME['text_secondary']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 16px; 
+                font-size: 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+                color: {THEME['text_primary']};
+                border-color: {THEME['accent_hover']};
+            }}
+        """)
+        self.toggle_tools_btn.clicked.connect(self._toggle_tools)
+        bottom_layout.addWidget(self.toggle_tools_btn)
+
+        # Добавляем контейнер инструментов в нижнюю панель (сразу за кнопкой)
+        bottom_layout.addWidget(self.tools_container)
+        
+        # Спейсер, чтобы сдвинуть всё влево
         bottom_layout.addStretch()
         
         # Интеграция Grip прямо в bottom_bar
@@ -2531,6 +2763,43 @@ class ModernTaskManager(QMainWindow):
         
         main_layout.addWidget(container)
     
+    
+    def _toggle_tools(self):
+        """Переключение видимости панели инструментов"""
+        is_visible = self.tools_container.isVisible()
+        
+        # Анимация появления/исчезновения (опционально)
+        # Для простоты пока используем setVisible
+        self.tools_container.setVisible(not is_visible)
+        
+        # Обновляем иконку/состояние кнопки
+        if not is_visible:
+            self.toggle_tools_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {THEME['accent_bg']};
+                    color: {THEME['accent_text']};
+                    border: 1px solid {THEME['accent_hover']};
+                    border-radius: 16px; 
+                    font-size: 16px;
+                }}
+            """)
+        else:
+            self.toggle_tools_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: {THEME['text_secondary']};
+                    border: 1px solid {THEME['border_color']};
+                    border-radius: 16px; 
+                    font-size: 16px;
+                }}
+                QPushButton:hover {{
+                    background-color: {THEME['secondary_hover']};
+                    color: {THEME['text_primary']};
+                    border-color: {THEME['accent_hover']};
+                }}
+            """)
+
+
     def _show_zoom_slider(self):
         """Показать вертикальный слайдер масштаба"""
         # Текущий масштаб
@@ -3075,8 +3344,138 @@ class ModernTaskManager(QMainWindow):
         """Показать диалог 'О программе'"""
         dialog = AboutDialog(self)
         dialog.exec()
+        
+    def _check_updates(self):
+        """Проверка обновлений (заглушка)"""
+        from PySide6.QtWidgets import QMessageBox
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Обновление TaskMaster")
+        msg.setText("У вас установлена последняя версия TaskMaster v1.0.0")
+        msg.setIcon(QMessageBox.Information)
+        
+        # Стилизация MsgBox
+        msg.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: {THEME['window_bg_end']};
+            }}
+            QLabel {{
+                color: {THEME['text_primary']};
+                font-size: 14px;
+            }}
+            QPushButton {{
+                background-color: {THEME['accent_bg']};
+                color: {THEME['accent_text']};
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+                min-width: 80px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['accent_hover']};
+            }}
+        """)
+        msg.exec()
     
-    def _cycle_theme(self):
+    def _show_theme_menu(self):
+        """Показать меню выбора темы"""
+        from PySide6.QtWidgets import QMenu
+        from PySide6.QtGui import QAction, QColor
+        
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {THEME['window_bg_end']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 8px;
+                padding: 5px;
+            }}
+            QMenu::item {{
+                padding: 5px 20px;
+                border-radius: 4px;
+            }}
+            QMenu::item:selected {{
+                background-color: {THEME['secondary_hover']};
+            }}
+        """)
+        
+        themes = {
+            "Зеленый (По умолчанию)": {
+                'accent_bg': "rgba(107, 207, 127, 0.4)",
+                'accent_hover': "rgba(107, 207, 127, 0.6)",
+                'accent_text': "#ffffff"
+            },
+            "Синий": {
+                'accent_bg': "rgba(64, 156, 255, 0.4)",
+                'accent_hover': "rgba(64, 156, 255, 0.6)",
+                'accent_text': "#ffffff"
+            },
+            "Фиолетовый": {
+                'accent_bg': "rgba(170, 64, 255, 0.4)",
+                'accent_hover': "rgba(170, 64, 255, 0.6)",
+                'accent_text': "#ffffff"
+            },
+            "Оранжевый": {
+                'accent_bg': "rgba(255, 149, 0, 0.4)",
+                'accent_hover': "rgba(255, 149, 0, 0.6)",
+                'accent_text': "#ffffff"
+            },
+            "Розовый": {
+                'accent_bg': "rgba(255, 45, 85, 0.4)",
+                'accent_hover': "rgba(255, 45, 85, 0.6)",
+                'accent_text': "#ffffff"
+            }
+        }
+        
+        for name, theme_data in themes.items():
+            action = QAction(f"● {name}", self)
+            # Замыкание для захвата данных темы
+            action.triggered.connect(lambda checked=False, t=theme_data: self._apply_custom_theme(t))
+            menu.addAction(action)
+            
+        menu.exec(self.theme_btn.mapToGlobal(QPoint(0, -menu.sizeHint().height())))
+        
+    def _apply_custom_theme(self, theme_data):
+        """Применение выбранной темы"""
+        THEME.update(theme_data)
+        
+        # Обновляем глобальные стили
+        global GLOBAL_STYLE
+        GLOBAL_STYLE = f"""
+            QWidget {{
+                color: {THEME['text_primary']};
+                font-family: 'Segoe UI';
+            }}
+            QToolTip {{
+                background-color: {THEME['window_bg_end']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border_color']};
+            }}
+        """
+        QApplication.instance().setStyleSheet(GLOBAL_STYLE)
+        
+        # Перерисовываем интерфейс (самый простой способ - обновить стили ключевых элементов)
+        # Или можно просто перезапустить установку стилей, но для простоты просто обновим фон
+        self.setStyleSheet(self.styleSheet())
+        
+        # Обновляем кнопку добавления (она использует акцентный цвет)
+        if hasattr(self, 'add_btn'):
+            self.add_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {THEME['accent_bg']};
+                    border: none;
+                    border-radius: 8px;
+                    padding: 8px 16px;
+                    color: {THEME['accent_text']};
+                }}
+                QPushButton:hover {{
+                    background-color: {THEME['accent_hover']};
+                }}
+            """)
+            
+        # Обновляем чекбоксы в задачах
+        self._refresh_tasks()
         """Циклическое переключение акцентного цвета"""
         # Текущий акцент
         current_accent = THEME['accent_bg']
@@ -3207,6 +3606,77 @@ class ModernTaskManager(QMainWindow):
     def exit_application(self):
         """Полный выход из приложения"""
         QApplication.instance().quit()
+
+
+    def _update_timers(self):
+        """Обновление таймеров активных задач"""
+        save_needed = False
+        for task in self.tasks:
+            if task.is_running:
+                task.time_spent += 1
+                save_needed = True
+                
+        if save_needed:
+            # Обновляем UI активных задач без полной перерисовки
+            # Находим карточки активных задач
+            if hasattr(self, 'tasks_layout'):
+                for i in range(self.tasks_layout.count()):
+                    item = self.tasks_layout.itemAt(i)
+                    if item and item.widget():
+                        card = item.widget()
+                        if isinstance(card, TaskCard) and card.task.is_running:
+                            card.update_time_display(card.task.time_spent)
+            
+            # Сохраняем не каждый тик, а, скажем, раз в минуту или при закрытии? 
+            # Для надежности сохраняем раз в 10 секунд или полагаемся на автосохранение при выходе/паузе.
+            # Пока оставим сохранение в памяти, сброс на диск при паузе/выходе.
+            pass
+
+    def toggle_task_timer(self, task_id):
+        """Переключение таймера задачи"""
+        for task in self.tasks:
+            if task.id == task_id:
+                # Если запускаем эту задачу, останавливаем другие (опционально)
+                if not task.is_running:
+                    for t in self.tasks:
+                        if t.is_running:
+                            t.is_running = False
+                            # Обновляем UI остановленной задачи
+                            self._refresh_single_task_card(t.id)
+                
+                task.is_running = not task.is_running
+                TaskStorage.save(self.tasks)
+                
+                # Обновляем UI текущей задачи
+                self._refresh_single_task_card(task_id)
+                break
+    
+    def reset_task_timer(self, task_id):
+        """Сброс таймера задачи"""
+        for task in self.tasks:
+            if task.id == task_id:
+                task.time_spent = 0
+                task.is_running = False
+                TaskStorage.save(self.tasks)
+                self._refresh_single_task_card(task_id)
+                break
+    
+    def _refresh_single_task_card(self, task_id):
+        """Обновление одной карточки задачи"""
+        if hasattr(self, 'tasks_layout'):
+            for i in range(self.tasks_layout.count()):
+                item = self.tasks_layout.itemAt(i)
+                if item and item.widget():
+                    card = item.widget()
+                    if isinstance(card, TaskCard) and card.task.id == task_id:
+                        # Находим обновленную задачу
+                        for task in self.tasks:
+                            if task.id == task_id:
+                                # Обновляем состояние без пересоздания
+                                card.task = task
+                                card.update_time_display(task.time_spent)
+                                card.update_timer_state(task.is_running)
+                                return
 
 
 def create_app_icon():
