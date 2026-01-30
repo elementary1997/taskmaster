@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Build и дистрибутивы
+build/
+dist/
+*.spec
+
+# Backup файлы
+backup/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Пользовательские данные (опционально - можно раскомментировать если не хотите коммитить)
+# tasks.json
+# theme_preference.txt

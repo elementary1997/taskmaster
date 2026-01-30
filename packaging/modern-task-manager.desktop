@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Modern Task Manager
+Comment=Manage your tasks with style
+Exec=/usr/bin/modern-task-manager
+Icon=/usr/share/icons/hicolor/256x256/apps/modern-task-manager.png
+Terminal=false
+Type=Application
+Categories=Utility;Application;
+Keywords=task;todo;manager;

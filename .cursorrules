@@ -1,0 +1,23 @@
+version: 1
+
+project:
+  name: taskmanager
+  description: Небольшой консольный менеджер задач на Python.
+  languages:
+    - python
+
+assistant:
+  style:
+    language: ru
+    tone: concise
+    code_samples: focused
+
+  rules:
+    - Если пользователь пишет по-русски, отвечать по-русски.
+    - При изменении кода в первую очередь анализировать файлы: run.py, task_manager.py, tasks.json.
+    - Не добавлять новые зависимости без явного запроса пользователя.
+    - По возможности сопровождать сложные участки кода короткими комментариями.
+
+files:
+  ignore:
+    - "__pycache__/"

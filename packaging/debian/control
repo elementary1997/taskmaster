@@ -1,0 +1,10 @@
+Package: modern-task-manager
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: User <user@example.com>
+Description: Modern Task Manager
+ A lightweight, transparent task manager built with PySide6.
+ Features glassmorphism design, task prioritization, and
+ JSON-based storage.
