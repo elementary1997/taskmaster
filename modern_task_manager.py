@@ -12,14 +12,19 @@ from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, asdict, field
 from typing import List, Optional
+import os
+import shutil
+import urllib.request
+import urllib.error
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QComboBox, QScrollArea,
     QFrame, QSizeGrip, QGraphicsDropShadowEffect, QDialog, QTextEdit, QSizePolicy,
-    QCalendarWidget, QDateEdit, QSystemTrayIcon, QTableView, QAbstractItemView, QLayout
+    QCalendarWidget, QDateEdit, QSystemTrayIcon, QTableView, QAbstractItemView, QLayout,
+    QProgressBar
 )
-from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, Property, QStandardPaths, QDate, QSize, QTimer, QByteArray
+from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, Property, QStandardPaths, QDate, QSize, QTimer, QByteArray, Signal, QThread
 from PySide6.QtGui import (
     QIcon, QFont, QColor, QPalette, QLinearGradient, QGradient, 
     QPainter, QPen, QBrush, QCursor, QAction, QPixmap, QDrag
@@ -63,6 +68,13 @@ GLOBAL_STYLE = """
     * {
         selection-background-color: transparent !important;
         selection-color: inherit !important;
+    }
+    QToolTip {
+        background-color: #1a1a2e;
+        color: #ffffff;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        padding: 4px;
     }
 """
 
@@ -2261,16 +2273,259 @@ class SliderPopup(QDialog):
         self.slider.valueChanged.connect(lambda v: self.val_lbl.setText(str(v)))
 
 
+
+class DownloadThread(QThread):
+    """Поток для скачивания файла с отслеживанием прогресса"""
+    progress = Signal(int)
+    finished = Signal(str)  # Путь к скачанному файлу или ошибка (начинается с "ERROR:")
+
+    def __init__(self, url, dest_path):
+        super().__init__()
+        self.url = url
+        self.dest_path = dest_path
+
+    def run(self):
+        try:
+            req = urllib.request.Request(self.url)
+            req.add_header('User-Agent', 'TaskMaster-Updater')
+            
+            with urllib.request.urlopen(req) as response:
+                total_size = int(response.info().get('Content-Length', 0))
+                bytes_downloaded = 0
+                chunk_size = 1024 * 64
+                
+                with open(self.dest_path, 'wb') as f:
+                    while True:
+                        chunk = response.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        bytes_downloaded += len(chunk)
+                        if total_size > 0:
+                            percent = int((bytes_downloaded / total_size) * 100)
+                            self.progress.emit(percent)
+            
+            self.finished.emit(self.dest_path)
+        except Exception as e:
+            self.finished.emit(f"ERROR: {str(e)}")
+
+
+class UpdateDialog(QDialog):
+    """Диалог уведомления об обновлении с поддержкой Markdown"""
+    def __init__(self, parent, version, changelog, download_url):
+        super().__init__(parent)
+        self.download_url = download_url
+        self.version = version
+        
+        self.setWindowTitle("Обновление доступно")
+        self.setMinimumSize(450, 500)
+        self.setStyleSheet(f"background-color: {THEME['window_bg_end']}; color: {THEME['text_primary']};")
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # Заголовок
+        title_lbl = QLabel(f"🚀 Доступна версия v{version}")
+        title_lbl.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        title_lbl.setStyleSheet(f"color: {THEME['accent_hover']};")
+        layout.addWidget(title_lbl)
+        
+        # Чейнджлог
+        self.text_edit = QTextEdit()
+        self.text_edit.setReadOnly(True)
+        self.text_edit.setMarkdown(changelog)
+        self.text_edit.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: rgba(255, 255, 255, 0.05);
+                border: 1px solid {THEME['border_color']};
+                border-radius: 8px;
+                padding: 10px;
+                color: {THEME['text_primary']};
+                font-size: 13px;
+            }}
+        """)
+        layout.addWidget(self.text_edit)
+        
+        # Прогресс бар
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid {THEME['border_color']};
+                border-radius: 5px;
+                text-align: center;
+                color: white;
+                height: 20px;
+            }}
+            QProgressBar::chunk {{
+                background-color: {THEME['accent_bg']};
+                border-radius: 4px;
+            }}
+        """)
+        self.progress_bar.hide()
+        layout.addWidget(self.progress_bar)
+        
+        # Статус скачивания
+        self.status_lbl = QLabel("")
+        self.status_lbl.setStyleSheet("color: #4cd137; font-weight: bold;")
+        self.status_lbl.hide()
+        layout.addWidget(self.status_lbl)
+        
+        # Кнопки
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+        
+        self.update_btn = QPushButton("Обновить сейчас")
+        self.update_btn.setFixedHeight(36)
+        self.update_btn.setCursor(Qt.PointingHandCursor)
+        self.update_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['accent_bg']};
+                color: {THEME['accent_text']};
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+                padding: 0 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['accent_hover']};
+            }}
+        """)
+        self.update_btn.clicked.connect(self._start_download)
+        
+        self.later_btn = QPushButton("Позже")
+        self.later_btn.setFixedHeight(36)
+        self.later_btn.setCursor(Qt.PointingHandCursor)
+        self.later_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(255, 255, 255, 0.1);
+                color: {THEME['text_primary']};
+                border: none;
+                border-radius: 6px;
+                padding: 0 20px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255, 255, 255, 0.2);
+            }}
+        """)
+        self.later_btn.clicked.connect(self.reject)
+        
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.later_btn)
+        btn_layout.addWidget(self.update_btn)
+        layout.addLayout(btn_layout)
+        
+        # Для перетаскивания
+        self.old_pos = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.old_pos = event.globalPos()
+
+    def mouseMoveEvent(self, event):
+        if self.old_pos is not None:
+            delta = QPoint(event.globalPos() - self.old_pos)
+            self.move(self.x() + delta.x(), self.y() + delta.y())
+            self.old_pos = event.globalPos()
+
+    def mouseReleaseEvent(self, event):
+        self.old_pos = None
+
+    def _start_download(self):
+        # Если ссылка не на EXE (например, просто страница релиза), открываем в браузере
+        if not self.download_url.lower().endswith('.exe'):
+            import webbrowser
+            webbrowser.open(self.download_url)
+            self.status_lbl.setText("🌐 Открыта страница загрузки в браузере")
+            self.status_lbl.show()
+            self.update_btn.setText("Закрыть")
+            self.update_btn.clicked.disconnect()
+            self.update_btn.clicked.connect(self.accept)
+            return
+
+        self.update_btn.setEnabled(False)
+        self.progress_bar.show()
+        self.progress_bar.setValue(0)
+        
+        # Определяем путь для скачивания
+        temp_dir = QStandardPaths.writableLocation(QStandardPaths.TempLocation)
+        self.temp_dest = os.path.join(temp_dir, "TaskMaster_new.exe")
+        
+        self.download_thread = DownloadThread(self.download_url, self.temp_dest)
+        self.download_thread.progress.connect(self.progress_bar.setValue)
+        self.download_thread.finished.connect(self._on_download_finished)
+        self.download_thread.start()
+
+    def _on_download_finished(self, result):
+        if result.startswith("ERROR:"):
+            self.update_btn.setEnabled(True)
+            self.status_lbl.setText(f"Ошибка: {result[6:]}")
+            self.status_lbl.setStyleSheet("color: #ff4444;")
+            self.status_lbl.show()
+            return
+        
+        # Пытаемся заменить файл
+        success = self._replace_executable(result)
+        
+        if success:
+            self.status_lbl.setText("✅ Готово! Перезапустите программу.")
+            self.status_lbl.setStyleSheet("color: #4cd137;")
+            self.status_lbl.show()
+            self.update_btn.setText("Закрыть")
+            self.update_btn.clicked.disconnect()
+            self.update_btn.clicked.connect(self.accept)
+            self.update_btn.setEnabled(True)
+        else:
+            self.status_lbl.setText("❌ Ошибка при замене файла.")
+            self.status_lbl.setStyleSheet("color: #ff4444;")
+            self.status_lbl.show()
+            self.update_btn.setEnabled(True)
+
+    def _replace_executable(self, new_file_path):
+        try:
+            current_exe = sys.executable
+            # Проверяем, запущены ли мы как EXE (frozen)
+            is_frozen = getattr(sys, 'frozen', False)
+            
+            if not is_frozen:
+                # Если мы просто скрипт, то имитируем успех (для тестов)
+                print(f"DEBUG: Not frozen. Would replace {current_exe} with {new_file_path}")
+                return True
+                
+            bak_file = current_exe + ".bak"
+            
+            # 1. Удаляем старый .bak если есть
+            if os.path.exists(bak_file):
+                try: os.remove(bak_file)
+                except: pass
+            
+            # 2. Переименовываем текущий EXE (на Windows это можно делать с запущенным файлом)
+            os.rename(current_exe, bak_file)
+            
+            # 3. Копируем новый файл на место старого
+            shutil.copy2(new_file_path, current_exe)
+            
+            return True
+        except Exception as e:
+            print(f"Update error: {str(e)}")
+            return False
+
+
 class ModernTaskManager(QMainWindow):
     """Главное окно современного менеджера задач"""
     
     def __init__(self):
         super().__init__()
         
+        # Очистка старых версий после обновления
+        self._cleanup_old_version()
+        
         self.tasks: List[Task] = []
         self.drag_position = None
         self.selected_date = QDate.currentDate() # Текущая выбранная дата
         self.update_available = False  # Флаг доступности обновления
+        self.current_filter = "all"    # Текущий фильтр задач
         
         # Таймер для трекинга времени
         self.timer = QTimer(self)
@@ -2322,6 +2577,18 @@ class ModernTaskManager(QMainWindow):
         saved_opacity = SettingsManager.get("window_opacity", 0.96)
         self.setWindowOpacity(saved_opacity)
         
+    def _cleanup_old_version(self):
+        """Удаляет старый .bak файл, оставшийся после обновления"""
+        try:
+            current_exe = sys.executable
+            bak_file = current_exe + ".bak"
+            if os.path.exists(bak_file):
+                os.remove(bak_file)
+                print(f"Cleaned up old version: {bak_file}")
+        except Exception as e:
+            # Если файл еще занят или другая ошибка - просто игнорируем
+            pass
+            
     def closeEvent(self, event):
         """Обработка закрытия окна"""
         # Сохранение состояния
@@ -2487,8 +2754,8 @@ class ModernTaskManager(QMainWindow):
                 background-color: {THEME['card_bg_hover']};
             }}
             QComboBox QAbstractItemView::item:selected {{
-                background-color: transparent;
-                color: {THEME['text_primary']};
+                background-color: {THEME['accent_bg']};
+                color: {THEME['accent_text']};
             }}
         """)
         # Убираем стретч-фактор 1, чтобы комбобокс не задавливал кнопку
@@ -2520,12 +2787,43 @@ class ModernTaskManager(QMainWindow):
         form_layout.addLayout(priority_layout)
         container_layout.addWidget(self.add_form)
         
+        # === Кнопка фильтров (Компактная) ===
+        filter_header_layout = QHBoxLayout()
+        filter_header_layout.setContentsMargins(0, 5, 0, 5)
+        
         # Счетчик задач
         self.task_counter = QLabel("0 задач")
         self.task_counter.setFont(QFont("Segoe UI", 9))
         self.task_counter.setStyleSheet(f"color: {THEME['text_secondary']};")
         self.task_counter.setTextInteractionFlags(Qt.NoTextInteraction)
-        container_layout.addWidget(self.task_counter)
+        
+        filter_header_layout.addWidget(self.task_counter)
+        filter_header_layout.addStretch()
+        
+        self.filter_btn = QPushButton("🔘 Фильтры: Все")
+        self.filter_btn.setCursor(Qt.PointingHandCursor)
+        self.filter_btn.setFixedHeight(28)
+        self.filter_btn.setMinimumWidth(130)
+        self.filter_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(255, 255, 255, 0.05);
+                border: 1px solid {THEME['border_color']};
+                color: {THEME['text_secondary']};
+                border-radius: 14px;
+                padding: 0 12px;
+                font-size: 11px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                color: {THEME['text_primary']};
+            }}
+        """)
+        self.filter_btn.clicked.connect(self._show_filter_menu)
+        filter_header_layout.addWidget(self.filter_btn)
+        
+        container_layout.addLayout(filter_header_layout)
         
         # Область прокрутки для задач
         scroll = QScrollArea()
@@ -2570,6 +2868,7 @@ class ModernTaskManager(QMainWindow):
         # Контейнер для активных задач с поддержкой drop
         self.active_tasks_container = DropZoneWidget("active", self)
         self.active_tasks_container.setObjectName("active_drop_zone")
+        self.active_tasks_container.setMinimumHeight(150)  # Увеличена зона для удобного drop
         self.active_tasks_layout = QVBoxLayout(self.active_tasks_container)
         self.active_tasks_layout.setContentsMargins(0, 0, 0, 0)
         self.active_tasks_layout.setSpacing(8)
@@ -3137,6 +3436,12 @@ class ModernTaskManager(QMainWindow):
         active_tasks = [t for t in filtered_tasks if t.status != "Выполнено"]
         completed_tasks = [t for t in filtered_tasks if t.status == "Выполнено"]
         
+        # Применяем дополнительные фильтры
+        if self.current_filter == "active":
+            active_tasks = [t for t in active_tasks if t.status == "В работе"]
+        elif self.current_filter in ["high", "medium", "low"]:
+            active_tasks = [t for t in active_tasks if t.priority == self.current_filter]
+        
         # Сортировка активных по приоритету
         priority_map = {"high": 0, "medium": 1, "low": 2}
         active_tasks.sort(key=lambda t: priority_map.get(t.priority, 3))
@@ -3598,57 +3903,27 @@ class ModernTaskManager(QMainWindow):
                 data = json.loads(response.read().decode())
                 
                 latest_version = data['tag_name'].lstrip('v')
-                download_url = data.get('html_url', '')
                 changelog = data.get('body', 'Нет описания изменений')
+                
+                # Ищем прямую ссылку на EXE в активах релиза
+                exe_url = None
+                if 'assets' in data:
+                    for asset in data['assets']:
+                        if asset['name'].lower().endswith('.exe'):
+                            exe_url = asset['browser_download_url']
+                            break
+                
+                # Если EXE не найден (например, только исходники), используем html_url как запасной вариант
+                if not exe_url:
+                    exe_url = data.get('html_url', '')
                 
                 progress.close()
                 
                 # Сравнение версий
                 if self._compare_versions(latest_version, __version__) > 0:
-                    # Доступно обновление
-                    msg = QMessageBox(self)
-                    msg.setWindowTitle("Доступно обновление")
-                    msg.setIcon(QMessageBox.Information)
-                    msg.setText(f"Доступна новая версия TaskMaster v{latest_version}")
-                    msg.setInformativeText(
-                        f"Текущая версия: v{__version__}\n"
-                        f"Новая версия: v{latest_version}\n\n"
-                        f"Изменения:\n{changelog[:200]}..."
-                    )
-                    
-                    # Кнопки
-                    download_btn = msg.addButton("Скачать", QMessageBox.AcceptRole)
-                    msg.addButton("Позже", QMessageBox.RejectRole)
-                    
-                    # Стилизация
-                    msg.setStyleSheet(f"""
-                        QMessageBox {{
-                            background-color: {THEME['window_bg_end']};
-                        }}
-                        QLabel {{
-                            color: {THEME['text_primary']};
-                            font-size: 13px;
-                        }}
-                        QPushButton {{
-                            background-color: {THEME['accent_bg']};
-                            color: {THEME['accent_text']};
-                            border: none;
-                            border-radius: 6px;
-                            padding: 8px 20px;
-                            min-width: 100px;
-                            font-size: 13px;
-                        }}
-                        QPushButton:hover {{
-                            background-color: {THEME['accent_hover']};
-                        }}
-                    """)
-                    
-                    msg.exec()
-                    
-                    if msg.clickedButton() == download_btn:
-                        # Открываем страницу релиза в браузере
-                        import webbrowser
-                        webbrowser.open(download_url)
+                    # Доступно обновление - показываем наш кастомный диалог
+                    dialog = UpdateDialog(self, latest_version, changelog, exe_url)
+                    dialog.exec()
                 else:
                     # Уже последняя версия
                     msg = QMessageBox(self)
@@ -3758,8 +4033,6 @@ class ModernTaskManager(QMainWindow):
     
     def _check_updates_background(self):
         """Фоновая проверка обновлений без показа диалогов"""
-        import urllib.request
-        import json
         from threading import Thread
         
         try:
@@ -3890,9 +4163,11 @@ class ModernTaskManager(QMainWindow):
                 font-family: 'Segoe UI';
             }}
             QToolTip {{
-                background-color: {THEME['window_bg_end']};
-                color: {THEME['text_primary']};
-                border: 1px solid {THEME['border_color']};
+                background-color: {theme_data.get('window_bg_end', THEME['window_bg_end'])};
+                color: {theme_data.get('text_primary', THEME['text_primary'])};
+                border: 1px solid {theme_data.get('border_color', THEME['border_color'])};
+                border-radius: 4px;
+                padding: 4px;
             }}
         """
         QApplication.instance().setStyleSheet(GLOBAL_STYLE)
@@ -4034,16 +4309,64 @@ class ModernTaskManager(QMainWindow):
         # Кнопка пина (checked state uses accent)
         self.pin_btn.setStyleSheet(self.minimal_mode_btn.styleSheet())
         
-        # DateNavigator (selection uses accent) - it updates itself via update_styles callback in ZoomManager?
-        # No, ZoomManager callbacks only called on zoom change.
-        # But DateNavigator reads THEME every time it updates.
-        # So we just need to trigger an update.
         if hasattr(self, 'date_navigator'):
             self.date_navigator.update_styles()
             self.date_navigator.update_label()
+
+        if hasattr(self, 'priority_combo'):
+            self.priority_combo.setStyleSheet(f"""
+                QComboBox {{
+                    background-color: {THEME['input_bg']};
+                    border: 1px solid {THEME['border_color']};
+                    border-radius: 8px;
+                    padding: 8px 12px;
+                    color: {THEME['text_primary']};
+                }}
+                QComboBox:hover {{
+                    background-color: {THEME['input_bg_focus']};
+                }}
+                QComboBox:focus {{
+                    border: 1px solid {THEME['accent_hover']};
+                }}
+                QComboBox::drop-down {{
+                    border: none;
+                }}
+                QComboBox QAbstractItemView {{
+                    background-color: {THEME['card_bg']};
+                    border: 1px solid {THEME['border_color']};
+                    color: {THEME['text_primary']};
+                    outline: none;
+                }}
+                QComboBox QAbstractItemView::item {{
+                    padding: 6px 10px;
+                }}
+                QComboBox QAbstractItemView::item:selected {{
+                    background-color: {THEME['accent_bg']};
+                    color: {THEME['accent_text']};
+                }}
+            """)
             
         # Task Cards (re-create them to apply new theme)
         self._refresh_tasks()
+        
+        # Обновляем кнопку фильтров
+        if hasattr(self, 'filter_btn'):
+            self.filter_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: rgba(255, 255, 255, 0.05);
+                    border: 1px solid {THEME['border_color']};
+                    color: {THEME['text_secondary']};
+                    border-radius: 14px;
+                    padding: 0 12px;
+                    font-size: 11px;
+                    font-weight: 500;
+                }}
+                QPushButton:hover {{
+                    background-color: rgba(255, 255, 255, 0.1);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    color: {THEME['text_primary']};
+                }}
+            """)
 
     def exit_application(self):
         """Полный выход из приложения"""
@@ -4129,6 +4452,69 @@ class ModernTaskManager(QMainWindow):
                                 card.update_time_display(task.time_spent)
                                 card.update_timer_state(task.is_running)
                                 return
+                                
+    def _show_filter_menu(self):
+        """Показать выпадающее меню фильтров"""
+        from PySide6.QtWidgets import QMenu
+        from PySide6.QtGui import QAction
+        
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {THEME['window_bg_end']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 8px;
+                padding: 6px;
+            }}
+            QMenu::item {{
+                padding: 8px 32px 8px 16px;
+                border-radius: 4px;
+                margin: 2px;
+            }}
+            QMenu::item:selected {{
+                background-color: {THEME['accent_bg']};
+                color: {THEME['accent_text']};
+            }}
+            QMenu::icon {{
+                padding-left: 10px;
+            }}
+        """)
+        
+        filters = [
+            ("all", "📋 Все задачи"),
+            ("active", "⚡ Активные в работе"),
+            ("high", "🚩 Высокий приоритет"),
+            ("medium", "🟠 Средний приоритет"),
+            ("low", "🟢 Низкий приоритет")
+        ]
+        
+        for filter_id, label in filters:
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setChecked(self.current_filter == filter_id)
+            action.triggered.connect(lambda checked, fid=filter_id: self._set_filter(fid))
+            menu.addAction(action)
+            
+        # Показываем меню под кнопкой
+        menu.exec(self.filter_btn.mapToGlobal(QPoint(0, self.filter_btn.height() + 4)))
+
+    def _set_filter(self, filter_id):
+        """Установка текущего фильтра"""
+        self.current_filter = filter_id
+        
+        # Находим название для кнопки
+        filters = {
+            "all": "🔘 Фильтры: Все",
+            "active": "🔘 Фильтры: Активные",
+            "high": "🔘 Фильтры: Высокий",
+            "medium": "🔘 Фильтры: Средний",
+            "low": "🔘 Фильтры: Низкий"
+        }
+        self.filter_btn.setText(filters.get(filter_id, "🔘 Фильтры"))
+            
+        # Обновляем список задач
+        self._refresh_tasks()
 
 
 def create_app_icon():
