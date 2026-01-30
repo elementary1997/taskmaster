@@ -17,9 +17,9 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QComboBox, QScrollArea,
     QFrame, QSizeGrip, QGraphicsDropShadowEffect, QDialog, QTextEdit, QSizePolicy,
-    QCalendarWidget, QDateEdit, QSystemTrayIcon
+    QCalendarWidget, QDateEdit, QSystemTrayIcon, QTableView, QAbstractItemView, QLayout
 )
-from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, Property, QStandardPaths, QDate
+from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, Property, QStandardPaths, QDate, QSize
 from PySide6.QtGui import (
     QIcon, QFont, QColor, QPalette, QLinearGradient, QGradient, 
     QPainter, QPen, QBrush, QCursor, QAction, QPixmap
@@ -382,8 +382,31 @@ class DraggableDialog(QDialog):
     def resizeEvent(self, event):
         """Обновление позиции grip при изменении размера"""
         super().resizeEvent(event)
-        if hasattr(self, 'grip_wrapper'):
-            self.grip_wrapper.move(self.width() - 30, self.height() - 30)
+
+
+class CleanCalendarWidget(QCalendarWidget):
+    """Стабильный календарь с фиксированной сеткой"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFirstDayOfWeek(Qt.Monday)
+        self.setNavigationBarVisible(False)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Убираем рамку у внутренней таблицы
+        table = self.findChild(QTableView)
+        if table:
+            table.setFrameShape(QFrame.NoFrame)
+            table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            # Фильтруем выделение, чтобы не было синего фона
+            table.setSelectionMode(QAbstractItemView.NoSelection)
+
+    def paintCell(self, painter, rect, date):
+        # Просто вызываем стандартный метод отрисовки
+        # Стилизация идет через QSS
+        super().paintCell(painter, rect, date)
 
 
 class CustomCalendarWidget(QWidget):
@@ -446,7 +469,7 @@ class CustomCalendarWidget(QWidget):
         layout.addLayout(header_layout)
         
         # --- Calendar ---
-        self.calendar = QCalendarWidget()
+        self.calendar = CleanCalendarWidget()
         self.calendar.setNavigationBarVisible(False) # Hide default nav
         self.calendar.setGridVisible(False)
         self.calendar.setVerticalHeaderFormat(QCalendarWidget.NoVerticalHeader)
@@ -482,7 +505,7 @@ class CustomCalendarWidget(QWidget):
         
         # Add a spacer item or margin to the bottom of the layout
         layout.addWidget(self.calendar)
-        layout.addSpacing(6) # Add extra space at the bottom
+        # layout.addSpacing(6) # REMOVED: User reported empty space
         
         # Initial Sync
         self._sync_header_with_calendar(self.calendar.yearShown(), self.calendar.monthShown())
@@ -707,6 +730,7 @@ class DateNavigator(QFrame):
         
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(0,0,0,0)
+        layout.setSizeConstraint(QVBoxLayout.SetFixedSize) # Важно: авто-ресайз по контенту
         layout.addWidget(container)
         
         inner_layout = QVBoxLayout(container)
@@ -716,7 +740,10 @@ class DateNavigator(QFrame):
         custom_calendar = CustomCalendarWidget()
         custom_calendar.calendar.setSelectedDate(self.current_date)
         # Fix bottom clipping by forcing a slightly larger minimum height
-        custom_calendar.setMinimumHeight(300) 
+        custom_calendar = CustomCalendarWidget()
+        custom_calendar.calendar.setSelectedDate(self.current_date)
+        # Fix bottom clipping by forcing a slightly larger minimum height
+        # custom_calendar.setMinimumHeight(300) # User asked to remove empty space 
         
         def on_selected():
             self.set_date(custom_calendar.calendar.selectedDate())
@@ -756,16 +783,15 @@ class CloseButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Фон
+        # Фон (Красный)
         rect = self.rect()
         if self.isDown():
-            color = QColor(255, 107, 107, 200)
+            painter.setBrush(QColor(200, 50, 50))
         elif self.underMouse():
-            color = QColor(255, 107, 107, 128)
+            painter.setBrush(QColor(232, 17, 35))
         else:
-            color = QColor(255, 107, 107, 76)
+            painter.setBrush(Qt.transparent)
             
-        painter.setBrush(color)
         painter.setPen(Qt.NoPen)
         # Отступ 2 пикселя
         painter.drawEllipse(rect.adjusted(2, 2, -2, -2))
@@ -778,13 +804,14 @@ class CloseButton(QPushButton):
         # В PySide6 center() возвращает QPoint. Преобразуем
         cx, cy = float(rect.width()) / 2.0, float(rect.height()) / 2.0
         
-        offset = 4.0
-        
-        line1 = [QPoint(int(cx - offset), int(cy - offset)), QPoint(int(cx + offset), int(cy + offset))]
-        line2 = [QPoint(int(cx + offset), int(cy - offset)), QPoint(int(cx - offset), int(cy + offset))]
+        # Размер крестика
+        offset = 5.0
         
         painter.drawLine(cx - offset, cy - offset, cx + offset, cy + offset)
         painter.drawLine(cx + offset, cy - offset, cx - offset, cy + offset)
+
+
+
 
 
 class MinimizeButton(QPushButton):
@@ -1934,6 +1961,80 @@ class TaskCard(QFrame):
             self.date_label.setFont(ZoomManager.font("Segoe UI", 8))
 
 
+class SliderPopup(QDialog):
+    """Попап с вертикальным слайдером"""
+    def __init__(self, parent=None, title="", value=100, min_val=0, max_val=100, on_change=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        container = QFrame()
+        container.setStyleSheet(f"""
+            QFrame {{
+                background-color: {THEME['window_bg_start']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 8px;
+            }}
+        """)
+        layout.addWidget(container)
+        
+        inner = QVBoxLayout(container)
+        inner.setContentsMargins(10, 15, 10, 15)
+        inner.setSpacing(10)
+        
+        # Заголовок/Иконка
+        lbl = QLabel(title)
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setStyleSheet(f"color: {THEME['text_primary']}; font-weight: bold; border: none; font-size: 14px;")
+        inner.addWidget(lbl)
+        
+        # Слайдер
+        from PySide6.QtWidgets import QSlider
+        self.slider = QSlider(Qt.Vertical)
+        self.slider.setRange(min_val, max_val)
+        self.slider.setValue(value)
+        self.slider.setFixedHeight(120) 
+        self.slider.setStyleSheet(f"""
+            QSlider::groove:vertical {{
+                border: 1px solid {THEME['border_color']};
+                width: 6px;
+                background: {THEME['input_bg']};
+                margin: 0px;
+                border-radius: 3px;
+            }}
+            QSlider::handle:vertical {{
+                background: {THEME['accent_text']};
+                border: 1px solid {THEME['accent_hover']};
+                height: 14px;
+                width: 14px;
+                margin: 0 -5px;
+                border-radius: 7px;
+            }}
+            QSlider::sub-page:vertical {{
+                background: {THEME['input_bg']};
+                border-radius: 3px;
+            }}
+            QSlider::add-page:vertical {{
+                background: {THEME['accent_hover']};
+                border-radius: 3px;
+            }}
+        """)
+        if on_change:
+            self.slider.valueChanged.connect(on_change)
+        inner.addWidget(self.slider, 0, Qt.AlignHCenter)
+        
+        # Значение
+        self.val_lbl = QLabel(str(value))
+        self.val_lbl.setAlignment(Qt.AlignCenter)
+        self.val_lbl.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 11px; border: none;")
+        inner.addWidget(self.val_lbl)
+        
+        self.slider.valueChanged.connect(lambda v: self.val_lbl.setText(str(v)))
+
+
 class ModernTaskManager(QMainWindow):
     """Главное окно современного менеджера задач"""
     
@@ -2238,45 +2339,53 @@ class ModernTaskManager(QMainWindow):
         """)
         
         bottom_layout = QHBoxLayout(bottom_bar)
-        bottom_layout.setContentsMargins(20, 0, 8, 0) # Right margin smaller for grip
+        bottom_layout.setContentsMargins(20, 0, 8, 0)
         bottom_layout.setSpacing(10)
         
-        zoom_label = QLabel("Aa")
-        zoom_label.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 12px;")
-        bottom_layout.addWidget(zoom_label)
+        # --- Кнопки управления (Шрифт и Прозрачность) ---
         
-        from PySide6.QtWidgets import QSlider
-        self.zoom_slider = QSlider(Qt.Horizontal)
-        self.zoom_slider.setRange(80, 150) # 80% to 150%
-        self.zoom_slider.setValue(100)
-        self.zoom_slider.setFixedHeight(20)
-        self.zoom_slider.setStyleSheet(f"""
-            QSlider::groove:horizontal {{
+        # 1. Шрифт
+        self.zoom_btn = QPushButton("Aa")
+        self.zoom_btn.setFixedSize(32, 32)
+        self.zoom_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.zoom_btn.setToolTip("Размер шрифта")
+        self.zoom_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {THEME['text_primary']};
                 border: 1px solid {THEME['border_color']};
-                height: 4px;
-                background: {THEME['input_bg']};
-                margin: 0px;
-                border-radius: 2px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 14px;
             }}
-            QSlider::handle:horizontal {{
-                background: {THEME['accent_text']};
-                border: 1px solid {THEME['accent_hover']};
-                width: 14px;
-                height: 14px;
-                margin: -5px 0;
-                border-radius: 7px;
-            }}
-            QSlider::sub-page:horizontal {{
-                background: {THEME['accent_hover']};
-                border-radius: 2px;
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+                border-color: {THEME['accent_hover']};
             }}
         """)
-        self.zoom_slider.valueChanged.connect(self._on_zoom_changed)
-        bottom_layout.addWidget(self.zoom_slider)
+        self.zoom_btn.clicked.connect(self._show_zoom_slider)
+        bottom_layout.addWidget(self.zoom_btn)
         
-        zoom_label_large = QLabel("Aa")
-        zoom_label_large.setStyleSheet(f"color: {THEME['text_primary']}; font-size: 16px; font-weight: bold;")
-        bottom_layout.addWidget(zoom_label_large)
+        # 2. Прозрачность
+        self.opacity_btn = QPushButton("💧")
+        self.opacity_btn.setFixedSize(32, 32)
+        self.opacity_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.opacity_btn.setToolTip("Прозрачность окна")
+        self.opacity_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 6px;
+                font-size: 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+                border-color: {THEME['accent_hover']};
+            }}
+        """)
+        self.opacity_btn.clicked.connect(self._show_opacity_slider)
+        bottom_layout.addWidget(self.opacity_btn)
         
         # Разделитель
         sep = QFrame()
@@ -2367,61 +2476,6 @@ class ModernTaskManager(QMainWindow):
         self.pin_btn.clicked.connect(self._toggle_pin)
         bottom_layout.addWidget(self.pin_btn)
         
-        # Кнопка прозрачности (Меню)
-        self.opacity_btn = QPushButton("💧")
-        self.opacity_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.opacity_btn.setToolTip("Прозрачность")
-        self.opacity_btn.setFixedSize(24, 24)
-        self.opacity_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: transparent;
-                border: none;
-                color: {THEME['text_secondary']};
-                font-size: 14px;
-                border-radius: 4px;
-            }}
-            QPushButton:hover {{
-                background-color: {THEME['secondary_hover']};
-                color: {THEME['text_primary']};
-            }}
-            QPushButton::menu-indicator {{
-                image: none;
-                width: 0px;
-            }}
-        """)
-        
-        # Меню прозрачности
-        from PySide6.QtWidgets import QMenu
-        from PySide6.QtGui import QAction
-        
-        self.opacity_menu = QMenu(self)
-        self.opacity_menu.setStyleSheet(f"""
-            QMenu {{
-                background-color: {THEME['window_bg_end']};
-                border: 1px solid {THEME['border_color']};
-                border-radius: 8px;
-                padding: 4px;
-                color: {THEME['text_primary']};
-            }}
-            QMenu::item {{
-                padding: 4px 20px;
-                border-radius: 4px;
-            }}
-            QMenu::item:selected {{
-                background-color: {THEME['accent_bg']};
-                color: {THEME['accent_text']};
-            }}
-        """)
-        
-        for percent in [100, 80, 60, 40, 20]:
-            action = QAction(f"{percent}%", self)
-            action.triggered.connect(lambda checked=False, p=percent: self.setWindowOpacity(p / 100.0))
-            self.opacity_menu.addAction(action)
-            
-        # self.opacity_btn.setMenu(opacity_menu) # Убираем стандартное меню
-        self.opacity_btn.clicked.connect(self._show_opacity_menu)
-        bottom_layout.addWidget(self.opacity_btn)
-        
         # Кнопка смены темы (Акцентный цвет)
         self.theme_btn = QPushButton("🎨")
         self.theme_btn.setCursor(QCursor(Qt.PointingHandCursor))
@@ -2477,6 +2531,69 @@ class ModernTaskManager(QMainWindow):
         
         main_layout.addWidget(container)
     
+    def _show_zoom_slider(self):
+        """Показать вертикальный слайдер масштаба"""
+        # Текущий масштаб
+        current_val = int(ZoomManager.get_scale() * 100)
+        
+        popup = SliderPopup(
+            parent=self, 
+            title="Aa", 
+            value=current_val, 
+            min_val=80, 
+            max_val=150, 
+            on_change=self._on_zoom_changed
+        )
+        
+        # Важно: сначала подгоняем размер, чтобы знать высоту
+        popup.adjustSize()
+        
+        # Позиционируем над кнопкой
+        pos = self.zoom_btn.mapToGlobal(QPoint(0, 0))
+        x = pos.x() - (popup.width() - self.zoom_btn.width()) // 2
+        y = pos.y() - popup.height() - 10
+        
+        # Проверка границ экрана
+        screen_geo = self.screen().geometry()
+        if x < screen_geo.left(): x = screen_geo.left() + 5
+        if x + popup.width() > screen_geo.right(): x = screen_geo.right() - popup.width() - 5
+        
+        popup.move(x, y)
+        popup.exec()
+
+    def _show_opacity_slider(self):
+        """Показать вертикальный слайдер прозрачности"""
+        # Текущая прозрачность (0.0 - 1.0) -> (20 - 100)
+        current_opacity = int(self.windowOpacity() * 100)
+        
+        def on_opacity_change(val):
+            self.setWindowOpacity(val / 100.0)
+            
+        popup = SliderPopup(
+            parent=self, 
+            title="💧", 
+            value=current_opacity, 
+            min_val=20, # Не даем сделать совсем прозрачным
+            max_val=100, 
+            on_change=on_opacity_change
+        )
+        
+        # Важно: сначала подгоняем размер, чтобы знать высоту
+        popup.adjustSize()
+        
+        # Позиционируем над кнопкой
+        pos = self.opacity_btn.mapToGlobal(QPoint(0, 0))
+        x = pos.x() - (popup.width() - self.opacity_btn.width()) // 2
+        y = pos.y() - popup.height() - 10
+
+        # Проверка границ экрана
+        screen_geo = self.screen().geometry()
+        if x < screen_geo.left(): x = screen_geo.left() + 5
+        if x + popup.width() > screen_geo.right(): x = screen_geo.right() - popup.width() - 5
+        
+        popup.move(x, y)
+        popup.exec()
+
     def mousePressEvent(self, event):
         """Начало перетаскивания окна"""
         if event.button() == Qt.LeftButton:
@@ -3029,27 +3146,30 @@ class ModernTaskManager(QMainWindow):
         """)
         
         # Обновляем слайдер
-        self.zoom_slider.setStyleSheet(f"""
-            QSlider::groove:horizontal {{
-                border: 1px solid {THEME['border_color']};
-                height: 4px;
-                background: {THEME['input_bg']};
-                margin: 0px;
-                border-radius: 2px;
-            }}
-            QSlider::handle:horizontal {{
-                background: {THEME['accent_text']};
-                border: 1px solid {THEME['accent_hover']};
-                width: 14px;
-                height: 14px;
-                margin: -5px 0;
-                border-radius: 7px;
-            }}
-            QSlider::sub-page:horizontal {{
-                background: {THEME['accent_hover']};
-                border-radius: 2px;
-            }}
-        """)
+        # The zoom_slider is not a direct member of the main window, it's part of SliderPopup.
+        # This section should be removed or moved to SliderPopup's styling.
+        # For now, commenting it out as it refers to self.zoom_slider which doesn't exist here.
+        # self.zoom_slider.setStyleSheet(f"""
+        #     QSlider::groove:horizontal {{
+        #         border: 1px solid {THEME['border_color']};
+        #         height: 4px;
+        #         background: {THEME['input_bg']};
+        #         margin: 0px;
+        #         border-radius: 2px;
+        #     }}
+        #     QSlider::handle:horizontal {{
+        #         background: {THEME['accent_text']};
+        #         border: 1px solid {THEME['accent_hover']};
+        #         width: 14px;
+        #         height: 14px;
+        #         margin: -5px 0;
+        #         border-radius: 7px;
+        #     }}
+        #     QSlider::sub-page:horizontal {{
+        #         background: {THEME['accent_hover']};
+        #         border-radius: 2px;
+        #     }}
+        # """)
         
         # Кнопка минимализма (checked state uses accent)
         self.minimal_mode_btn.setStyleSheet(f"""
@@ -3206,3 +3326,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
