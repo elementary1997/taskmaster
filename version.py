@@ -2,8 +2,8 @@
 Информация о версии TaskMaster
 """
 
-__version__ = "1.0.1"
-__version_info__ = (1, 0, 1)
+__version__ = "1.0.0"
+__version_info__ = (1, 0, 0)
 
 # GitHub репозиторий для проверки обновлений
 GITHUB_REPO = "elementary1997/taskmaster"

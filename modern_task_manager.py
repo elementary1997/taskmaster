@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QLineEdit, QComboBox, QScrollArea,
     QFrame, QSizeGrip, QGraphicsDropShadowEffect, QDialog, QTextEdit, QSizePolicy,
     QCalendarWidget, QDateEdit, QSystemTrayIcon, QTableView, QAbstractItemView, QLayout,
-    QProgressBar
+    QProgressBar, QMessageBox, QProgressDialog
 )
 from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, Property, QStandardPaths, QDate, QSize, QTimer, QByteArray, Signal, QThread
 from PySide6.QtGui import (
@@ -70,11 +70,11 @@ GLOBAL_STYLE = """
         selection-color: inherit !important;
     }
     QToolTip {
-        background-color: #1a1a2e;
-        color: #ffffff;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 4px;
-        padding: 4px;
+        background-color: #1a1a2e !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 6px !important;
+        padding: 5px !important;
     }
 """
 
@@ -1378,7 +1378,7 @@ class AboutDialog(DraggableDialog):
         project_title.setTextInteractionFlags(Qt.NoTextInteraction)
         project_layout.addWidget(project_title)
         
-        version_label = QLabel("Версия 1.0.0")
+        version_label = QLabel("Версия 1.0.1")
         version_label.setFont(QFont("Segoe UI", 11))
         version_label.setStyleSheet(f"color: {THEME['text_secondary']};")
         version_label.setTextInteractionFlags(Qt.NoTextInteraction)
@@ -1837,7 +1837,6 @@ class TaskCard(QFrame):
         # Кнопка-переключатель таймера
         self.toggle_timer_btn = QPushButton("⏱️")
         self.toggle_timer_btn.setFixedSize(28, 28)
-        self.toggle_timer_btn.setToolTip("Показать таймер")
         self.toggle_timer_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.toggle_timer_btn.setStyleSheet(f"""
             QPushButton {{
@@ -1996,7 +1995,6 @@ class TaskCard(QFrame):
                     border-radius: 14px;
                 }}
             """)
-            self.toggle_timer_btn.setToolTip("Скрыть таймер")
         else:
             self.toggle_timer_btn.setStyleSheet(f"""
                 QPushButton {{
@@ -2011,7 +2009,6 @@ class TaskCard(QFrame):
                     color: {THEME['text_primary']};
                 }}
             """)
-            self.toggle_timer_btn.setToolTip("Показать таймер")
 
 
     def _edit_task(self):
@@ -2469,18 +2466,25 @@ class UpdateDialog(QDialog):
         success = self._replace_executable(result)
         
         if success:
-            self.status_lbl.setText("✅ Готово! Перезапустите программу.")
+            self.status_lbl.setText("✅ Готово! Нажмите для перезапуска.")
             self.status_lbl.setStyleSheet("color: #4cd137;")
             self.status_lbl.show()
-            self.update_btn.setText("Закрыть")
+            self.update_btn.setText("🚀 Перезапустить")
             self.update_btn.clicked.disconnect()
-            self.update_btn.clicked.connect(self.accept)
+            self.update_btn.clicked.connect(self._restart_app)
             self.update_btn.setEnabled(True)
         else:
             self.status_lbl.setText("❌ Ошибка при замене файла.")
             self.status_lbl.setStyleSheet("color: #ff4444;")
             self.status_lbl.show()
             self.update_btn.setEnabled(True)
+
+    def _restart_app(self):
+        """Перезапуск приложения"""
+        import os
+        import sys
+        # На Windows os.execl работает специфично, но в frozen режиме (EXE) это ок
+        os.execl(sys.executable, sys.executable, *sys.argv)
 
     def _replace_executable(self, new_file_path):
         try:
@@ -2514,6 +2518,7 @@ class UpdateDialog(QDialog):
 
 class ModernTaskManager(QMainWindow):
     """Главное окно современного менеджера задач"""
+    update_found = Signal(bool)
     
     def __init__(self):
         super().__init__()
@@ -2538,6 +2543,9 @@ class ModernTaskManager(QMainWindow):
         # Явно обновляем список задач после загрузки
         self._refresh_tasks()
         
+        # Подключаем сигнал обновления
+        self.update_found.connect(self._show_update_badge)
+        
         self.setWindowTitle("TaskMaster")
         self.setMinimumSize(320, 400)
         self.resize(380, 600)
@@ -2547,8 +2555,8 @@ class ModernTaskManager(QMainWindow):
             app_icon = create_app_icon()
             self.setWindowIcon(app_icon)
         
-        # Автоматическая проверка обновлений при запуске (через 3 секунды)
-        QTimer.singleShot(3000, self._check_updates_background)
+        # Автоматическая проверка обновлений при запуске (через 2 секунды)
+        QTimer.singleShot(2000, self._check_updates_background)
         
         # Убираем рамку и делаем окно полупрозрачным
         self.setWindowFlags(
@@ -2896,7 +2904,8 @@ class ModernTaskManager(QMainWindow):
                 background-color: transparent;
                 color: {THEME['text_secondary']};
                 border: none;
-                font-size: 12px;
+                font-size: 18px;
+                font-weight: bold;
             }}
             QPushButton:hover {{
                 color: {THEME['text_primary']};
@@ -3141,6 +3150,7 @@ class ModernTaskManager(QMainWindow):
         
         self.update_btn = QPushButton("🔄")
         self.update_btn.setFixedSize(32, 32)
+        self.update_btn.setObjectName("updateBtn")  # Для точного применения стилей
         self.update_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.update_btn.setToolTip("Проверить обновления")
         self.update_btn.setStyleSheet(f"""
@@ -3158,44 +3168,19 @@ class ModernTaskManager(QMainWindow):
             }}
         """)
         self.update_btn.clicked.connect(self._check_updates)
-        
-        # Badge для уведомления об обновлении
-        self.update_badge = QLabel()
-        self.update_badge.setFixedSize(10, 10)
-        self.update_badge.setStyleSheet("""
-            QLabel {
-                background-color: #ff4444;
-                border-radius: 5px;
-                border: 2px solid #1a1d2e;
-            }
-        """)
-        self.update_badge.hide()  # Скрыт по умолчанию
-        self.update_badge.setParent(self.update_btn)
-        self.update_badge.move(22, 2)  # Позиция в правом верхнем углу
-        
         bottom_layout.addWidget(self.update_btn)
 
         # Кнопка переключения инструментов (Слева)
         self.toggle_tools_btn = QPushButton("🛠️")
+        self.toggle_tools_btn.setObjectName("toolsBtn")
         self.toggle_tools_btn.setFixedSize(32, 32)
         self.toggle_tools_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.toggle_tools_btn.setToolTip("Показать инструменты")
-        self.toggle_tools_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: transparent;
-                color: {THEME['text_secondary']};
-                border: 1px solid {THEME['border_color']};
-                border-radius: 16px; 
-                font-size: 16px;
-            }}
-            QPushButton:hover {{
-                background-color: {THEME['secondary_hover']};
-                color: {THEME['text_primary']};
-                border-color: {THEME['accent_hover']};
-            }}
-        """)
         self.toggle_tools_btn.clicked.connect(self._toggle_tools)
         bottom_layout.addWidget(self.toggle_tools_btn)
+        
+        # Начальная установка подсказок и инициализация стилей
+        self.toggle_tools_btn.setToolTip("Показать инструменты")
+        self._update_bottom_bar_styles()
 
         # Добавляем контейнер инструментов в нижнюю панель (сразу за кнопкой)
         bottom_layout.addWidget(self.tools_container)
@@ -3239,37 +3224,13 @@ class ModernTaskManager(QMainWindow):
     def _toggle_tools(self):
         """Переключение видимости панели инструментов"""
         is_visible = self.tools_container.isVisible()
-        
-        # Анимация появления/исчезновения (опционально)
-        # Для простоты пока используем setVisible
         self.tools_container.setVisible(not is_visible)
         
-        # Обновляем иконку/состояние кнопки
-        if not is_visible:
-            self.toggle_tools_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {THEME['accent_bg']};
-                    color: {THEME['accent_text']};
-                    border: 1px solid {THEME['accent_hover']};
-                    border-radius: 16px; 
-                    font-size: 16px;
-                }}
-            """)
-        else:
-            self.toggle_tools_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: transparent;
-                    color: {THEME['text_secondary']};
-                    border: 1px solid {THEME['border_color']};
-                    border-radius: 16px; 
-                    font-size: 16px;
-                }}
-                QPushButton:hover {{
-                    background-color: {THEME['secondary_hover']};
-                    color: {THEME['text_primary']};
-                    border-color: {THEME['accent_hover']};
-                }}
-            """)
+        # Обновляем подсказку
+        self.toggle_tools_btn.setToolTip("Скрыть инструменты" if not is_visible else "Показать инструменты")
+        
+        # Обновляем стили всех кнопок через центральный метод
+        self._update_bottom_bar_styles()
     
     def _toggle_completed_section(self):
         """Переключение видимости секции выполненных задач"""
@@ -3437,9 +3398,7 @@ class ModernTaskManager(QMainWindow):
         completed_tasks = [t for t in filtered_tasks if t.status == "Выполнено"]
         
         # Применяем дополнительные фильтры
-        if self.current_filter == "active":
-            active_tasks = [t for t in active_tasks if t.status == "В работе"]
-        elif self.current_filter in ["high", "medium", "low"]:
+        if self.current_filter in ["high", "medium", "low"]:
             active_tasks = [t for t in active_tasks if t.priority == self.current_filter]
         
         # Сортировка активных по приоритету
@@ -3872,12 +3831,6 @@ class ModernTaskManager(QMainWindow):
         
     def _check_updates(self):
         """Проверка обновлений через GitHub"""
-        from PySide6.QtWidgets import QMessageBox, QProgressDialog
-        import urllib.request
-        import json
-        
-        # Скрываем badge так как пользователь проверяет обновления
-        self._show_update_badge(False)
         
         try:
             from version import __version__, GITHUB_API_URL
@@ -3921,7 +3874,8 @@ class ModernTaskManager(QMainWindow):
                 
                 # Сравнение версий
                 if self._compare_versions(latest_version, __version__) > 0:
-                    # Доступно обновление - показываем наш кастомный диалог
+                    # Доступно обновление - показываем badge и диалог
+                    self._show_update_badge(True)
                     dialog = UpdateDialog(self, latest_version, changelog, exe_url)
                     dialog.exec()
                 else:
@@ -4033,45 +3987,110 @@ class ModernTaskManager(QMainWindow):
     
     def _check_updates_background(self):
         """Фоновая проверка обновлений без показа диалогов"""
-        from threading import Thread
-        
-        try:
-            from version import __version__, GITHUB_API_URL
-        except ImportError:
-            return  # Если нет version.py - пропускаем
+        import threading
+        import urllib.request
+        import json
         
         def check_in_background():
+            print("Update check started in background...")
             try:
-                req = urllib.request.Request(GITHUB_API_URL)
-                req.add_header('User-Agent', 'TaskMaster')
+                import version
+                print(f"Current version: {version.__version__}")
                 
-                with urllib.request.urlopen(req, timeout=5) as response:
+                req = urllib.request.Request(version.GITHUB_API_URL, headers={'User-Agent': 'TaskMaster'})
+                with urllib.request.urlopen(req, timeout=15) as response:
                     data = json.loads(response.read().decode())
                     latest_version = data['tag_name'].lstrip('v')
+                    print(f"Latest version found: {latest_version}")
                     
-                    # Сравниваем версии
-                    if self._compare_versions(latest_version, __version__) > 0:
-                        # Обновление доступно - показываем badge
-                        QTimer.singleShot(0, lambda: self._show_update_badge(True))
+                    if self._compare_versions(latest_version, version.__version__) > 0:
+                        print("Update available! Emitting signal...")
+                        self.update_found.emit(True)
                     else:
-                        # Обновлений нет
-                        QTimer.singleShot(0, lambda: self._show_update_badge(False))
-            except:
-                # Тихо игнорируем ошибки фоновой проверки
-                pass
+                        print("No update available.")
+                        self.update_found.emit(False)
+            except Exception as e:
+                print(f"Background update check failed: {e}")
         
-        # Запускаем в отдельном потоке чтобы не блокировать UI
-        Thread(target=check_in_background, daemon=True).start()
+        threading.Thread(target=check_in_background, daemon=True).start()
     
     def _show_update_badge(self, show):
-        """Показать/скрыть badge обновления"""
+        """Показать/скрыть индикацию обновления"""
         self.update_available = show
         if show:
-            self.update_badge.show()
-            self.update_btn.setToolTip("Доступно обновление! Нажмите для подробностей")
+            # Используем синий цвет для обновления (выглядит как инфо, а не как ошибка)
+            self.update_btn.setText("")
+            self.update_btn.setIcon(create_notification_icon("#4dabf7", 64))
+            self.update_btn.setIconSize(QSize(24, 24))
+            self.update_btn.setToolTip("Доступно новое обновление! Нажмите для установки 🚀")
         else:
-            self.update_badge.hide()
+            self.update_btn.setIcon(QIcon()) # Убираем иконку
+            self.update_btn.setText("🔄")
             self.update_btn.setToolTip("Проверить обновления")
+        
+        # Обновляем стили кнопок
+        self._update_bottom_bar_styles()
+    
+    def _update_bottom_bar_styles(self):
+        """Обновление стилей кнопок в нижней панели"""
+        
+        # 1. Кнопка обновления
+        if self.update_available:
+            self.update_btn.setStyleSheet(f"""
+                QPushButton#updateBtn {{
+                    background-color: transparent !important;
+                    border: 2px solid #4dabf7 !important;
+                    border-radius: 16px; 
+                }}
+                QPushButton#updateBtn:hover {{
+                    background-color: rgba(77, 171, 247, 0.1) !important;
+                }}
+            """)
+        else:
+            self.update_btn.setStyleSheet(f"""
+                QPushButton#updateBtn {{
+                    background-color: transparent !important;
+                    color: {THEME['text_secondary']} !important;
+                    border: 1px solid {THEME['border_color']} !important;
+                    border-radius: 16px; 
+                    font-size: 16px;
+                    font-weight: normal;
+                }}
+                QPushButton#updateBtn:hover {{
+                    background-color: {THEME['secondary_hover']} !important;
+                    color: {THEME['text_primary']} !important;
+                    border-color: {THEME['accent_hover']} !important;
+                }}
+            """)
+
+        # 2. Кнопка инструментов
+        is_tools_visible = self.tools_container.isVisible()
+        if is_tools_visible:
+            self.toggle_tools_btn.setStyleSheet(f"""
+                QPushButton#toolsBtn {{
+                    background-color: {THEME['accent_bg']} !important;
+                    color: {THEME['accent_text']} !important;
+                    border: 1px solid {THEME['accent_hover']} !important;
+                    border-radius: 16px; 
+                    font-size: 16px;
+                }}
+            """)
+        else:
+            self.toggle_tools_btn.setStyleSheet(f"""
+                QPushButton#toolsBtn {{
+                    background-color: transparent !important;
+                    color: {THEME['text_secondary']} !important;
+                    border: 1px solid {THEME['border_color']} !important;
+                    border-radius: 16px; 
+                    font-size: 16px;
+                }}
+                QPushButton#toolsBtn:hover {{
+                    background-color: {THEME['secondary_hover']} !important;
+                    color: {THEME['text_primary']} !important;
+                    border-color: {THEME['accent_hover']} !important;
+                }}
+            """)
+
     
     def _compare_versions(self, v1, v2):
         """Сравнение версий (v1 > v2 = 1, v1 == v2 = 0, v1 < v2 = -1)"""
@@ -4309,6 +4328,20 @@ class ModernTaskManager(QMainWindow):
         # Кнопка пина (checked state uses accent)
         self.pin_btn.setStyleSheet(self.minimal_mode_btn.styleSheet())
         
+        # Обновляем стрелку выполненных
+        self.toggle_completed_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {THEME['text_secondary']};
+                border: none;
+                font-size: 18px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                color: {THEME['text_primary']};
+            }}
+        """)
+        
         if hasattr(self, 'date_navigator'):
             self.date_navigator.update_styles()
             self.date_navigator.update_label()
@@ -4367,6 +4400,31 @@ class ModernTaskManager(QMainWindow):
                     color: {THEME['text_primary']};
                 }}
             """)
+            
+        # Обновление подсказок (ToolTips) - Применяем максимально жестко
+        tooltip_style = f"""
+            QToolTip {{
+                background-color: {THEME['window_bg_start']} !important;
+                color: {THEME['text_primary']} !important;
+                border: 1px solid {THEME['border_color']} !important;
+                border-radius: 6px !important;
+                padding: 5px !important;
+            }}
+        """
+        QApplication.instance().setStyleSheet(GLOBAL_STYLE + tooltip_style)
+        self.setStyleSheet(self.styleSheet() + tooltip_style)
+        
+        # Обновление индикатора обновления
+        self.update_badge.setStyleSheet(f"""
+            QLabel {{
+                background-color: #ff4444;
+                border: 2px solid #ffffff;
+                border-radius: 6px;
+            }}
+        """)
+        
+        # Обновление кнопок нижней панели
+        self._update_bottom_bar_styles()
 
     def exit_application(self):
         """Полный выход из приложения"""
@@ -4483,7 +4541,6 @@ class ModernTaskManager(QMainWindow):
         
         filters = [
             ("all", "📋 Все задачи"),
-            ("active", "⚡ Активные в работе"),
             ("high", "🚩 Высокий приоритет"),
             ("medium", "🟠 Средний приоритет"),
             ("low", "🟢 Низкий приоритет")
@@ -4506,7 +4563,6 @@ class ModernTaskManager(QMainWindow):
         # Находим название для кнопки
         filters = {
             "all": "🔘 Фильтры: Все",
-            "active": "🔘 Фильтры: Активные",
             "high": "🔘 Фильтры: Высокий",
             "medium": "🔘 Фильтры: Средний",
             "low": "🔘 Фильтры: Низкий"
@@ -4515,6 +4571,7 @@ class ModernTaskManager(QMainWindow):
             
         # Обновляем список задач
         self._refresh_tasks()
+
 
 
 def create_app_icon():
@@ -4574,6 +4631,49 @@ def create_app_icon():
     
     icon = QIcon(pixmap)
     return icon
+
+
+def create_notification_icon(color="#4dabf7", size=64):
+    """Программное создание красивой иконки уведомления (восклицательный знак)"""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    
+    # 1. Свечение (Glow)
+    glow_color = QColor(color)
+    glow_color.setAlpha(50)
+    painter.setBrush(glow_color)
+    painter.setPen(Qt.NoPen)
+    painter.drawEllipse(0, 0, size, size)
+    
+    # 2. Основной круг (Border)
+    painter.setBrush(Qt.NoBrush)
+    pen = QPen(QColor(color), size // 15)
+    painter.setPen(pen)
+    margin = size // 10
+    painter.drawEllipse(margin, margin, size - 2*margin, size - 2*margin)
+    
+    # 3. Восклицательный знак (Perfectly symmetrical)
+    painter.setBrush(QColor(color))
+    painter.setPen(Qt.NoPen)
+    
+    # Палочка
+    rect_w = size // 8
+    rect_h = size // 2.5
+    rect_x = (size - rect_w) // 2
+    rect_y = size // 4
+    painter.drawRoundedRect(rect_x, rect_y, rect_w, rect_h, rect_w // 2, rect_w // 2)
+    
+    # Точка
+    dot_size = size // 8
+    dot_x = (size - dot_size) // 2
+    dot_y = size - size // 3.5
+    painter.drawEllipse(dot_x, dot_y, dot_size, dot_size)
+    
+    painter.end()
+    return QIcon(pixmap)
 
 
 def main():

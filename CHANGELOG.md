@@ -6,30 +6,40 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **Auto-Update System**: 
-    - Full update cycle: notification -> download -> safe replacement of the executable.
+    - Full update cycle: notification -> download -> safe replacement of executable.
     - Automatic cleanup of old `.bak` files on the next launch.
     - Direct EXE downloading from GitHub releases.
 - **Markdown Update Dialog**:
     - Beautifully formatted changelogs with headers, lists, and bold text support.
-    - Integrated download progress bar and status notifications (badge indicator).
+    - Integrated download progress bar and status notifications.
 - **Task Filtering System**:
-    - Added quick-access filters: **All**, **Active**, and Priority-based (🔴 High, 🟡 Medium, 🟢 Low).
-- **Improved ToolTips**:
-    - Fixed the "black box" issue on some systems.
-    - Added rounded corners, padding, and theme-consistent background colors for better readability.
-- **Drag & Drop Auto-Expand**: The "Completed Tasks" section now automatically expands when you hover over its header while dragging a task.
-- **Improved Task Counting**: Added proper Russian pluralization for task counters (e.g., "1 задача", "2 задачи", "5 задач").
-- **Smart UI**: The "Completed Tasks" section now automatically hides itself if there are no completed tasks.
-
-### Changed
-- **Build Optimization**: Refactored the Windows build process.
-    - Significantly reduced executable size (from ~150MB down to ~60MB).
-    - Drastically improved application startup time (from ~10s down to ~2s).
-    - Optimized PyInstaller configuration to exclude redundant modules.
-- **Smooth Animations**: Improved the collapsing/expanding behavior of the completed tasks section with smoother transitions.
+    - Compact search & filter button with a dropdown menu.
+    - Added quick-access filters: **All Content**, **Active Tasks**, and Priority-based (� High, � Medium, 🟢 Low).
+- **UX Improvements**:
+    - Large drop zone (150px) for moving tasks from "Completed" back to "Active".
+    - Fixed the "black box" tooltip issue; added rounded corners and theme-consistent colors.
+    - Selection highlighting in priority level select.
 
 ### Fixed
-- Fixed drag-and-drop issues where tasks sometimes failed to move to the "Completed" section.
-- Fixed layout "jumping" when toggling the visibility of completed tasks.
-- Improved error handling for the update system (handling 404 errors when no releases are published yet).
-- Corrected various UI alignment and scaling issues in the settings and about dialogs.
+- Fixed icon clipping in the filter dropdown menu.
+- Corrected initialization order in UI setup preventing application crashes.
+
+## [1.0.0] - 2026-01-30
+
+### Added
+- **Initial Release of Modern Task Manager**.
+- **Core Features**:
+    - Task creation with three priority levels (High, Medium, Low).
+    - Pomodoro-style timer for each task.
+    - Drag & drop functionality for task reordering and status changes.
+    - "Completed Tasks" history section.
+- **Dynamic Design**:
+    - 5 built-in color themes (Blue, Green, Purple, Dark, Pink).
+    - Window transparency and UI scaling adjustments.
+    - Custom tray icon and background mode.
+- **Smart Logic**:
+    - Russian pluralization support for task counters.
+    - Auto-collapsing/expanding sections.
+- **Optimization**:
+    - Highly optimized Windows executable size (~60MB).
+    - Fast startup time (<2s).
