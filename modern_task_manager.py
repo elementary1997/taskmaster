@@ -1385,54 +1385,6 @@ class AboutDialog(DraggableDialog):
         
         content_layout.addWidget(project_frame)
         
-        # Планы на будущее
-        updates_frame = QFrame()
-        updates_frame.setStyleSheet(f"""
-            QFrame {{
-                background-color: {THEME['card_bg']};
-                border-radius: 12px;
-                border: none;
-            }}
-        """)
-        updates_layout = QVBoxLayout(updates_frame)
-        updates_layout.setContentsMargins(16, 16, 16, 16)
-        updates_layout.setSpacing(12)
-        
-        updates_title = QLabel("🚀 Планы на будущее")
-        updates_title.setFont(QFont("Segoe UI", 14, QFont.Bold))
-        updates_title.setStyleSheet(f"color: {THEME['text_primary']};")
-        updates_title.setTextInteractionFlags(Qt.NoTextInteraction)
-        updates_layout.addWidget(updates_title)
-        
-        # Описание планов
-        updates_desc = QLabel(
-            "В будущих версиях планируется реализовать систему автоматического обновления программы. "
-            "Это позволит пользователям получать новые версии и исправления без необходимости "
-            "вручную скачивать и устанавливать обновления."
-        )
-        updates_desc.setFont(QFont("Segoe UI", 10))
-        updates_desc.setStyleSheet(f"color: {THEME['text_secondary']};")
-        updates_desc.setWordWrap(True)
-        updates_desc.setTextInteractionFlags(Qt.NoTextInteraction)
-        updates_layout.addWidget(updates_desc)
-        
-        # Список планов
-        future_plans = [
-            "🔄 Автоматическое обновление программы на новую версию",
-            "📥 Проверка обновлений при запуске",
-            "⚡ Уведомления о доступных обновлениях",
-            "🔒 Безопасная установка обновлений"
-        ]
-        
-        for plan_text in future_plans:
-            plan_item = QLabel(f"• {plan_text}")
-            plan_item.setFont(QFont("Segoe UI", 10))
-            plan_item.setStyleSheet(f"color: {THEME['text_secondary']};")
-            plan_item.setWordWrap(True)
-            plan_item.setTextInteractionFlags(Qt.NoTextInteraction)
-            updates_layout.addWidget(plan_item)
-        
-        content_layout.addWidget(updates_frame)
         
         # Особенности
         features_frame = QFrame()
@@ -2318,6 +2270,7 @@ class ModernTaskManager(QMainWindow):
         self.tasks: List[Task] = []
         self.drag_position = None
         self.selected_date = QDate.currentDate() # Текущая выбранная дата
+        self.update_available = False  # Флаг доступности обновления
         
         # Таймер для трекинга времени
         self.timer = QTimer(self)
@@ -2338,6 +2291,9 @@ class ModernTaskManager(QMainWindow):
         if self.windowIcon().isNull():
             app_icon = create_app_icon()
             self.setWindowIcon(app_icon)
+        
+        # Автоматическая проверка обновлений при запуске (через 3 секунды)
+        QTimer.singleShot(3000, self._check_updates_background)
         
         # Убираем рамку и делаем окно полупрозрачным
         self.setWindowFlags(
@@ -2877,7 +2833,13 @@ class ModernTaskManager(QMainWindow):
         self.help_btn.clicked.connect(self._show_about)
         bottom_layout.addWidget(self.help_btn)
 
-        # Кнопка проверки обновлений
+        # Кнопка проверки обновлений (с badge)
+        update_container = QWidget()
+        update_container.setFixedSize(32, 32)
+        update_container_layout = QVBoxLayout(update_container)
+        update_container_layout.setContentsMargins(0, 0, 0, 0)
+        update_container_layout.setSpacing(0)
+        
         self.update_btn = QPushButton("🔄")
         self.update_btn.setFixedSize(32, 32)
         self.update_btn.setCursor(QCursor(Qt.PointingHandCursor))
@@ -2897,6 +2859,21 @@ class ModernTaskManager(QMainWindow):
             }}
         """)
         self.update_btn.clicked.connect(self._check_updates)
+        
+        # Badge для уведомления об обновлении
+        self.update_badge = QLabel()
+        self.update_badge.setFixedSize(10, 10)
+        self.update_badge.setStyleSheet("""
+            QLabel {
+                background-color: #ff4444;
+                border-radius: 5px;
+                border: 2px solid #1a1d2e;
+            }
+        """)
+        self.update_badge.hide()  # Скрыт по умолчанию
+        self.update_badge.setParent(self.update_btn)
+        self.update_badge.move(22, 2)  # Позиция в правом верхнем углу
+        
         bottom_layout.addWidget(self.update_btn)
 
         # Кнопка переключения инструментов (Слева)
@@ -3589,36 +3566,258 @@ class ModernTaskManager(QMainWindow):
         dialog.exec()
         
     def _check_updates(self):
-        """Проверка обновлений (заглушка)"""
-        from PySide6.QtWidgets import QMessageBox
+        """Проверка обновлений через GitHub"""
+        from PySide6.QtWidgets import QMessageBox, QProgressDialog
+        import urllib.request
+        import json
         
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Обновление TaskMaster")
-        msg.setText("У вас установлена последняя версия TaskMaster v1.0.0")
-        msg.setIcon(QMessageBox.Information)
+        # Скрываем badge так как пользователь проверяет обновления
+        self._show_update_badge(False)
         
-        # Стилизация MsgBox
-        msg.setStyleSheet(f"""
-            QMessageBox {{
-                background-color: {THEME['window_bg_end']};
-            }}
-            QLabel {{
-                color: {THEME['text_primary']};
-                font-size: 14px;
-            }}
-            QPushButton {{
-                background-color: {THEME['accent_bg']};
-                color: {THEME['accent_text']};
-                border: none;
-                border-radius: 6px;
-                padding: 6px 16px;
-                min-width: 80px;
-            }}
-            QPushButton:hover {{
-                background-color: {THEME['accent_hover']};
-            }}
-        """)
-        msg.exec()
+        try:
+            from version import __version__, GITHUB_API_URL
+        except ImportError:
+            __version__ = "1.0.0"
+            GITHUB_API_URL = "https://api.github.com/repos/elementary1997/taskmaster/releases/latest"
+        
+        # Диалог проверки
+        progress = QProgressDialog("Проверка обновлений...", None, 0, 0, self)
+        progress.setWindowTitle("TaskMaster")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+        progress.show()
+        QApplication.processEvents()
+        
+        try:
+            # Запрос к GitHub API
+            req = urllib.request.Request(GITHUB_API_URL)
+            req.add_header('User-Agent', 'TaskMaster')
+            
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                
+                latest_version = data['tag_name'].lstrip('v')
+                download_url = data.get('html_url', '')
+                changelog = data.get('body', 'Нет описания изменений')
+                
+                progress.close()
+                
+                # Сравнение версий
+                if self._compare_versions(latest_version, __version__) > 0:
+                    # Доступно обновление
+                    msg = QMessageBox(self)
+                    msg.setWindowTitle("Доступно обновление")
+                    msg.setIcon(QMessageBox.Information)
+                    msg.setText(f"Доступна новая версия TaskMaster v{latest_version}")
+                    msg.setInformativeText(
+                        f"Текущая версия: v{__version__}\n"
+                        f"Новая версия: v{latest_version}\n\n"
+                        f"Изменения:\n{changelog[:200]}..."
+                    )
+                    
+                    # Кнопки
+                    download_btn = msg.addButton("Скачать", QMessageBox.AcceptRole)
+                    msg.addButton("Позже", QMessageBox.RejectRole)
+                    
+                    # Стилизация
+                    msg.setStyleSheet(f"""
+                        QMessageBox {{
+                            background-color: {THEME['window_bg_end']};
+                        }}
+                        QLabel {{
+                            color: {THEME['text_primary']};
+                            font-size: 13px;
+                        }}
+                        QPushButton {{
+                            background-color: {THEME['accent_bg']};
+                            color: {THEME['accent_text']};
+                            border: none;
+                            border-radius: 6px;
+                            padding: 8px 20px;
+                            min-width: 100px;
+                            font-size: 13px;
+                        }}
+                        QPushButton:hover {{
+                            background-color: {THEME['accent_hover']};
+                        }}
+                    """)
+                    
+                    msg.exec()
+                    
+                    if msg.clickedButton() == download_btn:
+                        # Открываем страницу релиза в браузере
+                        import webbrowser
+                        webbrowser.open(download_url)
+                else:
+                    # Уже последняя версия
+                    msg = QMessageBox(self)
+                    msg.setWindowTitle("Обновление TaskMaster")
+                    msg.setText(f"У вас установлена последняя версия TaskMaster v{__version__}")
+                    msg.setIcon(QMessageBox.Information)
+                    
+                    # Стилизация
+                    msg.setStyleSheet(f"""
+                        QMessageBox {{
+                            background-color: {THEME['window_bg_end']};
+                        }}
+                        QLabel {{
+                            color: {THEME['text_primary']};
+                            font-size: 14px;
+                        }}
+                        QPushButton {{
+                            background-color: {THEME['accent_bg']};
+                            color: {THEME['accent_text']};
+                            border: none;
+                            border-radius: 6px;
+                            padding: 6px 16px;
+                            min-width: 80px;
+                        }}
+                        QPushButton:hover {{
+                            background-color: {THEME['accent_hover']};
+                        }}
+                    """)
+                    msg.exec()
+                    
+        except urllib.error.HTTPError as e:
+            progress.close()
+            
+            if e.code == 404:
+                # Нет релизов на GitHub
+                msg = QMessageBox(self)
+                msg.setWindowTitle("Обновление TaskMaster")
+                msg.setText(f"У вас установлена последняя версия TaskMaster v{__version__}")
+                msg.setInformativeText("Релизы пока не опубликованы на GitHub.")
+                msg.setIcon(QMessageBox.Information)
+                msg.setStyleSheet(f"""
+                    QMessageBox {{
+                        background-color: {THEME['window_bg_end']};
+                    }}
+                    QLabel {{
+                        color: {THEME['text_primary']};
+                        font-size: 13px;
+                    }}
+                    QPushButton {{
+                        background-color: {THEME['accent_bg']};
+                        color: {THEME['accent_text']};
+                        border: none;
+                        border-radius: 6px;
+                        padding: 6px 16px;
+                    }}
+                """)
+                msg.exec()
+            else:
+                # Другая HTTP ошибка
+                msg = QMessageBox(self)
+                msg.setWindowTitle("Ошибка")
+                msg.setText("Не удалось проверить обновления")
+                msg.setInformativeText(f"HTTP ошибка: {e.code}")
+                msg.setIcon(QMessageBox.Warning)
+                msg.setStyleSheet(f"""
+                    QMessageBox {{
+                        background-color: {THEME['window_bg_end']};
+                    }}
+                    QLabel {{
+                        color: {THEME['text_primary']};
+                    }}
+                    QPushButton {{
+                        background-color: {THEME['accent_bg']};
+                        color: {THEME['accent_text']};
+                        border: none;
+                        border-radius: 6px;
+                        padding: 6px 16px;
+                    }}
+                """)
+                msg.exec()
+                    
+        except Exception as e:
+            progress.close()
+            
+            # Ошибка проверки
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Ошибка")
+            msg.setText("Не удалось проверить обновления")
+            msg.setInformativeText(f"Проверьте подключение к интернету\n\nОшибка: {str(e)}")
+            msg.setIcon(QMessageBox.Warning)
+            msg.setStyleSheet(f"""
+                QMessageBox {{
+                    background-color: {THEME['window_bg_end']};
+                }}
+                QLabel {{
+                    color: {THEME['text_primary']};
+                }}
+                QPushButton {{
+                    background-color: {THEME['accent_bg']};
+                    color: {THEME['accent_text']};
+                    border: none;
+                    border-radius: 6px;
+                    padding: 6px 16px;
+                }}
+            """)
+            msg.exec()
+    
+    def _check_updates_background(self):
+        """Фоновая проверка обновлений без показа диалогов"""
+        import urllib.request
+        import json
+        from threading import Thread
+        
+        try:
+            from version import __version__, GITHUB_API_URL
+        except ImportError:
+            return  # Если нет version.py - пропускаем
+        
+        def check_in_background():
+            try:
+                req = urllib.request.Request(GITHUB_API_URL)
+                req.add_header('User-Agent', 'TaskMaster')
+                
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    data = json.loads(response.read().decode())
+                    latest_version = data['tag_name'].lstrip('v')
+                    
+                    # Сравниваем версии
+                    if self._compare_versions(latest_version, __version__) > 0:
+                        # Обновление доступно - показываем badge
+                        QTimer.singleShot(0, lambda: self._show_update_badge(True))
+                    else:
+                        # Обновлений нет
+                        QTimer.singleShot(0, lambda: self._show_update_badge(False))
+            except:
+                # Тихо игнорируем ошибки фоновой проверки
+                pass
+        
+        # Запускаем в отдельном потоке чтобы не блокировать UI
+        Thread(target=check_in_background, daemon=True).start()
+    
+    def _show_update_badge(self, show):
+        """Показать/скрыть badge обновления"""
+        self.update_available = show
+        if show:
+            self.update_badge.show()
+            self.update_btn.setToolTip("Доступно обновление! Нажмите для подробностей")
+        else:
+            self.update_badge.hide()
+            self.update_btn.setToolTip("Проверить обновления")
+    
+    def _compare_versions(self, v1, v2):
+        """Сравнение версий (v1 > v2 = 1, v1 == v2 = 0, v1 < v2 = -1)"""
+        def normalize(v):
+            return [int(x) for x in v.split('.')]
+        
+        parts1 = normalize(v1)
+        parts2 = normalize(v2)
+        
+        for i in range(max(len(parts1), len(parts2))):
+            p1 = parts1[i] if i < len(parts1) else 0
+            p2 = parts2[i] if i < len(parts2) else 0
+            
+            if p1 > p2:
+                return 1
+            elif p1 < p2:
+                return -1
+        
+        return 0
     
     def _show_theme_menu(self):
         """Показать меню выбора темы"""

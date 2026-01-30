@@ -59,7 +59,7 @@ def build_exe():
     elif icon_png.exists():
         icon_file = icon_png
 
-    # PyInstaller arguments
+    # PyInstaller arguments - ОПТИМИЗИРОВАНО для быстрого запуска
     args = [
         "pyinstaller",
         "--noconsole",          # Don't show console window
@@ -68,21 +68,23 @@ def build_exe():
         "--clean",              # Clean cache
         "--windowed",           # Windows subsystem
         
-        # Скрытые импорты для PySide6 (импортируются локально в коде)
-        "--hidden-import", "PySide6.QtWidgets.QMenu",
-        "--hidden-import", "PySide6.QtWidgets.QSlider",
-        "--hidden-import", "PySide6.QtCore.QTimer",
-        "--hidden-import", "PySide6.QtGui.QAction",
-        
-        # Включаем все подмодули PySide6
-        "--collect-submodules", "PySide6",
+        # Только необходимые скрытые импорты (не весь PySide6!)
+        "--hidden-import", "PySide6.QtWidgets",
+        "--hidden-import", "PySide6.QtCore",
+        "--hidden-import", "PySide6.QtGui",
+        "--hidden-import", "PySide6.QtMultimedia",
+        "--hidden-import", "urllib.request",
+        "--hidden-import", "json",
         
         # Включаем папку audio с звуковыми файлами
         "--add-data", f"audio{os.pathsep}audio",
         
-        # Дополнительные опции для правильной работы
-        "--collect-all", "PySide6",  # Собираем все ресурсы PySide6
-        "--noupx",  # Отключаем UPX для стабильности
+        # Включаем version.py для проверки обновлений
+        "--add-data", f"version.py{os.pathsep}.",
+        
+        # Оптимизация для быстрого запуска
+        "--noupx",              # Отключаем UPX (быстрее запуск)
+        "--optimize", "2",      # Оптимизация Python байткода
     ]
     
     # Добавляем иконку, если она существует
