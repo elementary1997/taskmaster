@@ -22,8 +22,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, Property, QStandardPaths, QDate, QSize, QTimer, QByteArray
 from PySide6.QtGui import (
     QIcon, QFont, QColor, QPalette, QLinearGradient, QGradient, 
-    QPainter, QPen, QBrush, QCursor, QAction, QPixmap
+    QPainter, QPen, QBrush, QCursor, QAction, QPixmap, QDrag
 )
+from PySide6.QtCore import QMimeData
 
 
 # Глобальный стиль для отключения focus rect и выделений
@@ -88,6 +89,27 @@ def get_settings_file():
     return app_dir / "settings.json"
 
 SETTINGS_FILE = get_settings_file()
+
+# === Вспомогательные функции ===
+
+def pluralize(number, forms):
+    """
+    Склонение слов в русском языке
+    forms: (единственное, множественное 2-4, множественное 5+)
+    Пример: pluralize(5, ('задача', 'задачи', 'задач'))
+    """
+    n = abs(number)
+    n %= 100
+    if n >= 5 and n <= 20:
+        return forms[2]
+    n %= 10
+    if n == 1:
+        return forms[0]
+    if n >= 2 and n <= 4:
+        return forms[1]
+    return forms[2]
+
+# === Классы ===
 
 class SettingsManager:
     """Управление настройками приложения"""
@@ -1683,6 +1705,9 @@ class TaskCard(QFrame):
         self.priority_label = None
         self.date_label = None
         
+        # Drag & Drop
+        self.drag_start_position = None
+        
         self._setup_ui()
         
     def _setup_ui(self):
@@ -2101,7 +2126,113 @@ class TaskCard(QFrame):
             self.priority_label.setFont(ZoomManager.font("Segoe UI", 8))
         if hasattr(self, 'date_label') and self.date_label:
             self.date_label.setFont(ZoomManager.font("Segoe UI", 8))
+    
+    def mousePressEvent(self, event):
+        """Начало перетаскивания"""
+        if event.button() == Qt.LeftButton:
+            self.drag_start_position = event.position().toPoint()
+        super().mousePressEvent(event)
+    
+    def mouseMoveEvent(self, event):
+        """Перетаскивание карточки"""
+        # Проверяем, что зажата левая кнопка
+        if not (event.buttons() & Qt.LeftButton):
+            return
+            
+        if self.drag_start_position is None:
+            return
+        
+        # Проверяем, что переместились достаточно далеко
+        distance = (event.position().toPoint() - self.drag_start_position).manhattanLength()
+        
+        if distance < 10:  # Порог для начала drag
+            return
+        
+        # Создаем drag
+        drag = QDrag(self)
+        mime_data = QMimeData()
+        mime_data.setText(str(self.task.id))  # Передаем ID задачи
+        drag.setMimeData(mime_data)
+        
+        # Создаем превью карточки
+        pixmap = self.grab()
+        drag.setPixmap(pixmap)
+        drag.setHotSpot(event.position().toPoint())
+        
+        # Сбрасываем позицию чтобы не запускать drag повторно
+        self.drag_start_position = None
+        
+        # Выполняем drag
+        drag.exec(Qt.MoveAction)
 
+
+
+class CompletedHeaderWidget(QWidget):
+    """Заголовок выполненных задач с поддержкой drop для авто-разворачивания"""
+    
+    def __init__(self, parent_window, parent=None):
+        super().__init__(parent)
+        self.parent_window = parent_window
+        self.setAcceptDrops(True)
+    
+    def dragEnterEvent(self, event):
+        """При наведении с drag - разворачиваем секцию"""
+        if event.mimeData().hasText():
+            # Разворачиваем секцию, если она свернута
+            if not self.parent_window.completed_tasks_container.isVisible():
+                self.parent_window.completed_tasks_container.setVisible(True)
+                self.parent_window.toggle_completed_btn.setText("▼")
+            event.acceptProposedAction()
+    
+    def dragLeaveEvent(self, event):
+        """Обработка выхода"""
+        pass
+    
+    def dropEvent(self, event):
+        """Перенаправляем drop на контейнер задач"""
+        if event.mimeData().hasText():
+            task_id = event.mimeData().text()
+            new_status = "Выполнено"
+            if self.parent_window:
+                self.parent_window.change_task_status_by_id(task_id, new_status)
+            event.acceptProposedAction()
+
+
+class DropZoneWidget(QWidget):
+    """Виджет-контейнер с поддержкой drop"""
+    
+    def __init__(self, zone_type, parent_window, parent=None):
+        super().__init__(parent)
+        self.zone_type = zone_type  # 'active' или 'completed'
+        self.parent_window = parent_window
+        self.setAcceptDrops(True)
+    
+    def dragEnterEvent(self, event):
+        """Обработка входа в зону drop"""
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+            # Подсветка зоны
+            self.setStyleSheet(f"background-color: {THEME['accent_bg']};  border-radius: 8px;")
+    
+    def dragLeaveEvent(self, event):
+        """Обработка выхода из зоны drop"""
+        self.setStyleSheet("background-color: transparent;")
+    
+    def dropEvent(self, event):
+        """Обработка drop"""
+        self.setStyleSheet("background-color: transparent;")
+        
+        if event.mimeData().hasText():
+            task_id = event.mimeData().text()
+            
+            # Определяем новый статус
+            new_status = "Выполнено" if self.zone_type == "completed" else "В процессе"
+            
+            # Обновляем статус задачи
+            if self.parent_window:
+                self.parent_window.change_task_status_by_id(task_id, new_status)
+            
+            event.acceptProposedAction()
 
 
 class SliderPopup(QDialog):
@@ -2470,10 +2601,75 @@ class ModernTaskManager(QMainWindow):
         # Контейнер для задач
         self.tasks_container = QWidget()
         self.tasks_container.setStyleSheet("background: transparent;")
-        self.tasks_layout = QVBoxLayout(self.tasks_container)
-        self.tasks_layout.setContentsMargins(0, 0, 0, 0)
-        self.tasks_layout.setSpacing(8)
-        self.tasks_layout.addStretch()
+        main_tasks_layout = QVBoxLayout(self.tasks_container)
+        main_tasks_layout.setContentsMargins(0, 0, 0, 0)
+        main_tasks_layout.setSpacing(16)
+        
+        # === Секция активных задач ===
+        active_header = QLabel("📋 Активные задачи")
+        active_header.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        active_header.setStyleSheet(f"color: {THEME['text_primary']}; padding: 8px 0px;")
+        main_tasks_layout.addWidget(active_header)
+        
+        # Контейнер для активных задач с поддержкой drop
+        self.active_tasks_container = DropZoneWidget("active", self)
+        self.active_tasks_container.setObjectName("active_drop_zone")
+        self.active_tasks_layout = QVBoxLayout(self.active_tasks_container)
+        self.active_tasks_layout.setContentsMargins(0, 0, 0, 0)
+        self.active_tasks_layout.setSpacing(8)
+        self.active_tasks_layout.addStretch()
+        main_tasks_layout.addWidget(self.active_tasks_container, 1)  # Stretch factor 1
+        
+        # === Разделитель ===
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet(f"background-color: {THEME['border_color']}; max-height: 1px;")
+        main_tasks_layout.addWidget(separator)
+        
+        # === Секция выполненных задач ===
+        completed_header_widget = CompletedHeaderWidget(self)
+        completed_header_layout = QHBoxLayout(completed_header_widget)
+        completed_header_layout.setContentsMargins(0, 0, 0, 0)
+        completed_header_layout.setSpacing(8)
+        
+        # Кнопка сворачивания/разворачивания
+        self.toggle_completed_btn = QPushButton("▼")
+        self.toggle_completed_btn.setFixedSize(24, 24)
+        self.toggle_completed_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.toggle_completed_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {THEME['text_secondary']};
+                border: none;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                color: {THEME['text_primary']};
+            }}
+        """)
+        self.toggle_completed_btn.clicked.connect(self._toggle_completed_section)
+        completed_header_layout.addWidget(self.toggle_completed_btn)
+        
+        self.completed_header_label = QLabel("✅ Выполненные задачи (0)")
+        self.completed_header_label.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        self.completed_header_label.setStyleSheet(f"color: {THEME['text_secondary']}; padding: 8px 0px;")
+        completed_header_layout.addWidget(self.completed_header_label)
+        completed_header_layout.addStretch()
+        
+        main_tasks_layout.addWidget(completed_header_widget)
+        
+        # Контейнер для выполненных задач с поддержкой drop
+        self.completed_tasks_container = DropZoneWidget("completed", self)
+        self.completed_tasks_container.setObjectName("completed_drop_zone")
+        self.completed_tasks_container.setFixedHeight(200)  # Фиксированная высота для drop зоны
+        self.completed_tasks_layout = QVBoxLayout(self.completed_tasks_container)
+        self.completed_tasks_layout.setContentsMargins(0, 0, 0, 0)
+        self.completed_tasks_layout.setSpacing(8)
+        self.completed_tasks_layout.addStretch()
+        main_tasks_layout.addWidget(self.completed_tasks_container, 0)  # Stretch factor 0 - не растягивается
+        
+        # Для обратной совместимости
+        self.tasks_layout = self.active_tasks_layout
         
         scroll.setWidget(self.tasks_container)
         container_layout.addWidget(scroll, 1)
@@ -2798,6 +2994,19 @@ class ModernTaskManager(QMainWindow):
                     border-color: {THEME['accent_hover']};
                 }}
             """)
+    
+    def _toggle_completed_section(self):
+        """Переключение видимости секции выполненных задач"""
+        is_visible = self.completed_tasks_container.isVisible()
+        
+        if is_visible:
+            # Сворачиваем
+            self.toggle_completed_btn.setText("▶")
+            self.completed_tasks_container.setVisible(False)
+        else:
+            # Разворачиваем
+            self.toggle_completed_btn.setText("▼")
+            self.completed_tasks_container.setVisible(True)
 
 
     def _show_zoom_slider(self):
@@ -2912,13 +3121,19 @@ class ModernTaskManager(QMainWindow):
     
     def _refresh_tasks(self):
         """Обновление списка задач"""
-        # Проверяем, существует ли tasks_layout
-        if not hasattr(self, 'tasks_layout') or self.tasks_layout is None:
+        # Проверяем, существуют ли layouts
+        if not hasattr(self, 'active_tasks_layout') or self.active_tasks_layout is None:
             return
         
-        # Очистка текущих карточек
-        while self.tasks_layout.count() > 1:  # Оставляем stretch
-            item = self.tasks_layout.takeAt(0)
+        # Очистка активных задач
+        while self.active_tasks_layout.count() > 1:  # Оставляем stretch
+            item = self.active_tasks_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Очистка выполненных задач
+        while self.completed_tasks_layout.count() > 1:  # Оставляем stretch
+            item = self.completed_tasks_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
@@ -2940,20 +3155,48 @@ class ModernTaskManager(QMainWindow):
             # Иначе показываем только по точному совпадению даты
             elif task.due_date == current_date_str:
                 filtered_tasks.append(task)
-                
-        # Сортировка: сначала невыполненные по приоритету, потом выполненные
-        priority_map = {"high": 0, "medium": 1, "low": 2}
-        filtered_tasks.sort(key=lambda t: (1 if t.status == "Выполнено" else 0, priority_map.get(t.priority, 3)))
-
-        # Добавление карточек задач
-        for task in filtered_tasks:
-            card = TaskCard(task, self)
-            self.tasks_layout.insertWidget(self.tasks_layout.count() - 1, card)
         
-        # Обновление счетчика
+        # Разделяем на активные и выполненные
+        active_tasks = [t for t in filtered_tasks if t.status != "Выполнено"]
+        completed_tasks = [t for t in filtered_tasks if t.status == "Выполнено"]
+        
+        # Сортировка активных по приоритету
+        priority_map = {"high": 0, "medium": 1, "low": 2}
+        active_tasks.sort(key=lambda t: priority_map.get(t.priority, 3))
+        
+        # Добавление карточек активных задач
+        for task in active_tasks:
+            card = TaskCard(task, self)
+            card.setAcceptDrops(False)  # Карточки не принимают drop
+            self.active_tasks_layout.insertWidget(self.active_tasks_layout.count() - 1, card)
+        
+        # Добавление карточек выполненных задач
+        for task in completed_tasks:
+            card = TaskCard(task, self)
+            card.setAcceptDrops(False)
+            self.completed_tasks_layout.insertWidget(self.completed_tasks_layout.count() - 1, card)
+        
+        # Обновление счетчиков
         total = len(filtered_tasks)
-        completed = sum(1 for t in filtered_tasks if t.status == "Выполнено")
-        self.task_counter.setText(f"{total} задач • {completed} выполнено")
+        completed_count = len(completed_tasks)
+        
+        # Склонения
+        tasks_word = pluralize(total, ('задача', 'задачи', 'задач'))
+        completed_word = pluralize(completed_count, ('выполнена', 'выполнены', 'выполнено'))
+        
+        self.task_counter.setText(f"{total} {tasks_word} • {completed_count} {completed_word}")
+        self.completed_header_label.setText(f"✅ Выполненные задачи ({completed_count})")
+        
+        # Автоматическое скрытие/показ секции выполненных задач
+        if completed_count == 0:
+            # Скрываем секцию если нет выполненных задач
+            self.completed_tasks_container.setVisible(False)
+            self.toggle_completed_btn.setText("▶")
+        else:
+            # Показываем секцию если есть выполненные задачи
+            if not self.completed_tasks_container.isVisible():
+                self.completed_tasks_container.setVisible(True)
+                self.toggle_completed_btn.setText("▼")
 
     def _on_date_changed(self, date):
         """Обработка смены даты"""
@@ -3659,6 +3902,16 @@ class ModernTaskManager(QMainWindow):
                 task.is_running = False
                 TaskStorage.save(self.tasks)
                 self._refresh_single_task_card(task_id)
+                break
+    
+    def change_task_status_by_id(self, task_id, new_status):
+        """Изменение статуса задачи (для drag & drop)"""
+        for task in self.tasks:
+            if str(task.id) == task_id:
+                task.status = new_status
+                TaskStorage.save(self.tasks)
+                # Полное обновление, так как задача перемещается между секциями
+                self._refresh_tasks()
                 break
     
     def _refresh_single_task_card(self, task_id):
