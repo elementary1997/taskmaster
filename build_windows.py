@@ -13,6 +13,7 @@ def build_exe():
     base_dir = Path(__file__).parent.resolve()
     script_path = base_dir / "modern_task_manager.py"
     audio_dir = base_dir / "audio"
+    icons_dir = base_dir / "icons"
     
     if not script_path.exists():
         print(f"❌ Error: Could not find {script_path}")
@@ -22,6 +23,25 @@ def build_exe():
     if not audio_dir.exists():
         print("⚠️  Warning: audio directory not found, creating it...")
         audio_dir.mkdir(exist_ok=True)
+    
+    # Проверяем наличие папки icons и иконки таймера
+    if not icons_dir.exists():
+        print("⚠️  Warning: icons directory not found, creating it...")
+        icons_dir.mkdir(exist_ok=True)
+    
+    # Проверяем наличие иконки таймера, если нет - создаем
+    timer_icon = icons_dir / "timer.png"
+    if not timer_icon.exists():
+        print("🎨 Generating timer icon...")
+        create_timer_icon = base_dir / "create_timer_icon.py"
+        if create_timer_icon.exists():
+            try:
+                subprocess.check_call([sys.executable, str(create_timer_icon)], cwd=base_dir)
+                print("✅ Timer icon generated successfully!")
+            except Exception as e:
+                print(f"⚠️  Could not generate timer icon: {e}")
+        else:
+            print("⚠️  create_timer_icon.py not found, skipping timer icon generation")
     
     # Проверяем наличие click.wav, если нет - генерируем
     click_wav = audio_dir / "click.wav"
@@ -78,6 +98,9 @@ def build_exe():
         
         # Включаем папку audio с звуковыми файлами
         "--add-data", f"audio{os.pathsep}audio",
+        
+        # Включаем папку icons с иконками
+        "--add-data", f"icons{os.pathsep}icons",
         
         # Включаем version.py для проверки обновлений
         "--add-data", f"version.py{os.pathsep}.",

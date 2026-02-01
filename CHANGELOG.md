@@ -2,27 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+
 ## [1.0.1] - 2026-01-30
 
-### Added
-- **Auto-Update System**: 
-    - Full update cycle: notification -> download -> safe replacement of executable.
-    - Automatic cleanup of old `.bak` files on the next launch.
-    - Direct EXE downloading from GitHub releases.
-- **Markdown Update Dialog**:
-    - Beautifully formatted changelogs with headers, lists, and bold text support.
-    - Integrated download progress bar and status notifications.
-- **Task Filtering System**:
-    - Compact search & filter button with a dropdown menu.
-    - Added quick-access filters: **All Content**, **Active Tasks**, and Priority-based (� High, � Medium, 🟢 Low).
-- **UX Improvements**:
-    - Large drop zone (150px) for moving tasks from "Completed" back to "Active".
-    - Fixed the "black box" tooltip issue; added rounded corners and theme-consistent colors.
-    - Selection highlighting in priority level select.
-
 ### Fixed
-- Fixed icon clipping in the filter dropdown menu.
-- Corrected initialization order in UI setup preventing application crashes.
+- **Theme Consistency**:
+    - Focus borders on input fields and dropdowns now correctly update to the active theme color immediately.
+    - Fixed an issue where separator lines and section headers retained colors from the previous theme.
+    - Bottom bar buttons (Help, Settings, Tools) now properly reflect theme colors (borders and hover states).
+- **UI/UX Improvements**:
+    - **Dropdown Readability**: Fixed transparency issues in the Priority dropdown where text overlapping with the background, and ensured text is readable in all themes.
+    - **Popup Menu Boundaries**: "Filters" and "Theme" menus now automatically adjust their position to stay within the main window boundaries.
+    - **Startup**: Fixed a bug where style corrections were applied only after switching themes, not on initial launch.
 
 ## [1.0.0] - 2026-01-30
 
