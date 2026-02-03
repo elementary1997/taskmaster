@@ -113,10 +113,10 @@ def get_input_field_style():
 # Определение пути к файлу данных
 def get_data_file():
     """Получить путь к файлу данных в папке пользователя"""
-    # Windows: C:/Users/<User>/AppData/Local/ModernTaskManager/tasks.json
-    # Linux: ~/.local/share/ModernTaskManager/tasks.json
+    # Windows: C:/Users/<User>/AppData/Local/TaskMaster/tasks.json
+    # Linux: ~/.local/share/TaskMaster/tasks.json
     base_path = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
-    app_dir = Path(base_path) / "ModernTaskManager"
+    app_dir = Path(base_path) / "TaskMaster"
     app_dir.mkdir(parents=True, exist_ok=True)
     return app_dir / "tasks.json"
 
@@ -126,7 +126,7 @@ TASKS_FILE = get_data_file()
 def get_settings_file():
     """Получить путь к файлу настроек"""
     base_path = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
-    app_dir = Path(base_path) / "ModernTaskManager"
+    app_dir = Path(base_path) / "TaskMaster"
     app_dir.mkdir(parents=True, exist_ok=True)
     return app_dir / "settings.json"
 
@@ -3892,7 +3892,11 @@ class UpdateDialog(QDialog):
         
         # Определяем путь для скачивания
         temp_dir = QStandardPaths.writableLocation(QStandardPaths.TempLocation)
-        self.temp_dest = os.path.join(temp_dir, "TaskMaster_new.exe")
+        # Определяем имя файла из URL или используем стандартное
+        filename = os.path.basename(self.download_url)
+        if not filename or not filename.endswith('.exe'):
+            filename = "TaskMaster-Installer.exe"
+        self.temp_dest = os.path.join(temp_dir, filename)
         
         self.download_thread = DownloadThread(self.download_url, self.temp_dest)
         self.download_thread.progress.connect(self.progress_bar.setValue)
@@ -3907,29 +3911,28 @@ class UpdateDialog(QDialog):
             self.status_lbl.show()
             return
         
-        # Пытаемся заменить файл
-        success = self._replace_executable(result)
-        
-        if success:
-            self.status_lbl.setText("✅ Готово! Нажмите для перезапуска.")
+        # Это инсталлятор - запускаем его для обновления
+        try:
+            import subprocess
+            # Запускаем инсталлятор (он сам определит, что это обновление)
+            subprocess.Popen([result], shell=True)
+            self.status_lbl.setText("✅ Инсталлятор запущен. Закройте приложение для обновления.")
             self.status_lbl.setStyleSheet("color: #4cd137;")
             self.status_lbl.show()
-            self.update_btn.setText("🚀 Перезапустить")
+            self.update_btn.setText("🚀 Закрыть и обновить")
             self.update_btn.clicked.disconnect()
-            self.update_btn.clicked.connect(self._restart_app)
+            self.update_btn.clicked.connect(self._close_and_update)
             self.update_btn.setEnabled(True)
-        else:
-            self.status_lbl.setText("❌ Ошибка при замене файла.")
+        except Exception as e:
+            self.status_lbl.setText(f"❌ Ошибка запуска инсталлятора: {str(e)}")
             self.status_lbl.setStyleSheet("color: #ff4444;")
             self.status_lbl.show()
             self.update_btn.setEnabled(True)
 
-    def _restart_app(self):
-        """Перезапуск приложения"""
-        import os
-        import sys
-        # На Windows os.execl работает специфично, но в frozen режиме (EXE) это ок
-        os.execl(sys.executable, sys.executable, *sys.argv)
+    def _close_and_update(self):
+        """Закрытие приложения для обновления через инсталлятор"""
+        self.accept()  # Закрываем диалог
+        QApplication.quit()  # Закрываем приложение
 
     def _replace_executable(self, new_file_path):
         try:
@@ -3968,6 +3971,9 @@ class CompletedTasksDialog(DraggableDialog):
         super().__init__(parent)
         self.setWindowTitle("Архив задач")
         self.resize(420, 550)
+        self.parent_window = parent
+        self.all_completed_tasks = []  # Все выполненные задачи
+        self.selected_date = QDate.currentDate()  # Выбранная дата
         
         # Основной лейаут для тени
         main_layout = QVBoxLayout(self)
@@ -4026,6 +4032,14 @@ class CompletedTasksDialog(DraggableDialog):
         header_layout.addWidget(close_btn)
         
         layout.addWidget(header_frame)
+        
+        # Навигатор по датам
+        self.date_navigator = DateNavigator(self, self._on_date_changed)
+        date_nav_frame = QFrame()
+        date_nav_layout = QHBoxLayout(date_nav_frame)
+        date_nav_layout.setContentsMargins(20, 10, 20, 10)
+        date_nav_layout.addWidget(self.date_navigator)
+        layout.addWidget(date_nav_frame)
 
         
         # Область скролла
@@ -4061,8 +4075,29 @@ class CompletedTasksDialog(DraggableDialog):
         
         # Добавляем grip
         self.add_grip(self.container)
+    
+    def _on_date_changed(self, date):
+        """Обработчик изменения даты"""
+        self.selected_date = date
+        self._refresh_tasks()
+    
+    def _refresh_tasks(self):
+        """Обновление списка задач по выбранной дате"""
+        # Фильтруем задачи по дате выполнения
+        current_date_str = self.selected_date.toString("yyyy-MM-dd")
+        filtered_tasks = []
         
-    def set_tasks(self, tasks, parent_window):
+        for task in self.all_completed_tasks:
+            # Проверяем дату выполнения задачи
+            if task.completion_date:
+                # Если дата выполнения совпадает с выбранной датой
+                if task.completion_date == current_date_str:
+                    filtered_tasks.append(task)
+        
+        # Отображаем отфильтрованные задачи
+        self._display_tasks(filtered_tasks)
+    
+    def _display_tasks(self, tasks):
         """Отображение списка задач"""
         # Очистка
         while self.tasks_layout.count() > 1: # Оставляем stretch
@@ -4073,7 +4108,7 @@ class CompletedTasksDialog(DraggableDialog):
         # Добавление
         for task in tasks:
             # Создаем карточку, передаем parent_window для обработки кликов (чекбокс, удаление)
-            card = TaskCard(task, parent_window) 
+            card = TaskCard(task, self.parent_window) 
             card.setAcceptDrops(False)
             
             # Скрываем кнопку таймера и разделитель в архиве
@@ -4083,6 +4118,13 @@ class CompletedTasksDialog(DraggableDialog):
                 card.timer_separator.setVisible(False)
             
             self.tasks_layout.insertWidget(self.tasks_layout.count() - 1, card)
+        
+    def set_tasks(self, tasks, parent_window):
+        """Установка списка всех выполненных задач"""
+        self.all_completed_tasks = tasks
+        self.parent_window = parent_window
+        # Обновляем отображение по текущей выбранной дате
+        self._refresh_tasks()
 
 class TimeReportDialog(DraggableDialog):
     """Диалог отчета по времени за выбранный день"""
@@ -4477,6 +4519,10 @@ class ModernTaskManager(QMainWindow):
         self._initial_resize_done = False # Флаг для предотвращения авторесайза после старта
         self.notifications_dismissed = False  # Флаг: пользователь закрыл уведомления
         self.overdue_tasks: List[Task] = []  # Список просроченных задач
+        self._active_filter_menu = None  # Ссылка на открытое меню фильтров
+        
+        # Устанавливаем eventFilter для отслеживания перемещения окна
+        self.installEventFilter(self)
         
         # Таймер для трекинга времени
         self.timer = QTimer(self)
@@ -4621,6 +4667,17 @@ class ModernTaskManager(QMainWindow):
         if msg.message == 0x00A1: # WM_NCLBUTTONDOWN
             # Если началось перемещение окна (клик по заголовку)
             if msg.wParam == 2: # HTCAPTION
+                # Проверяем, не кликнули ли на кнопку фильтров
+                if hasattr(self, 'filter_btn') and self.filter_btn.isVisible():
+                    # Получаем координаты клика
+                    x = ctypes.c_short(msg.lParam & 0xFFFF).value
+                    y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
+                    global_pos = QPoint(x, y)
+                    filter_btn_global_pos = self.filter_btn.mapToGlobal(QPoint(0, 0))
+                    filter_btn_rect = QRect(filter_btn_global_pos, self.filter_btn.size())
+                    if filter_btn_rect.contains(global_pos):
+                        return True, 0 # Блокируем перетаскивание
+                
                 # Если есть открытые меню - закрываем их и БЛОКИРУЕМ перетаскивание
                 # (чтобы список не "уезжал" вместе с окном)
                 if self._has_active_popups():
@@ -4675,6 +4732,13 @@ class ModernTaskManager(QMainWindow):
             if resize_result:
                 return True, resize_result
 
+            # Проверяем, не кликнули ли на кнопку фильтров
+            if hasattr(self, 'filter_btn') and self.filter_btn.isVisible():
+                filter_btn_global_pos = self.filter_btn.mapToGlobal(QPoint(0, 0))
+                filter_btn_rect = QRect(filter_btn_global_pos, self.filter_btn.size())
+                if filter_btn_rect.contains(global_pos):
+                    return True, 1 # HTCLIENT - не перетаскивать
+            
             # --- Логика перемещения (Title Bar) ---
             if hasattr(self, 'header_widget'):
                 # Определяем глобальную позицию заголовка
@@ -4701,7 +4765,11 @@ class ModernTaskManager(QMainWindow):
     # mousePressEvent удален, так как мы вернули нативный драг для работы Snap
 
     def _has_active_popups(self):
-        """Проверяет наличие активных всплывающих окон"""
+        """Проверка наличия активных всплывающих окон"""
+        # Проверяем меню фильтров
+        if self._active_filter_menu and self._active_filter_menu.isVisible():
+            return True
+        
         # 0. Самая надежная проверка через monkey-patching
         if hasattr(self, '_active_popups') and self._active_popups:
              # print(f"DEBUG: NCHITTEST sees active popups: {self._active_popups}", flush=True)
@@ -4727,17 +4795,22 @@ class ModernTaskManager(QMainWindow):
         
     def _force_close_popups(self):
         """Принудительное закрытие всех всплывающих окон"""
-        # 0. Закрываем через наш надежный список
+        # 0. Закрываем меню фильтров
+        if self._active_filter_menu:
+            self._active_filter_menu.close()
+            self._active_filter_menu = None
+        
+        # 1. Закрываем через наш надежный список
         if hasattr(self, '_active_popups'):
             for combo in list(self._active_popups):
                 combo.hidePopup()
         
-        # 1. Обычный Qt механизм
+        # 2. Обычный Qt механизм
         popup = QApplication.activePopupWidget()
         if popup:
             popup.close()
             
-        # 2. Топ-левел виджеты с флагом Popup
+        # 3. Топ-левел виджеты с флагом Popup
         for widget in QApplication.topLevelWidgets():
             if widget is not self and widget.isWindow() and widget.isVisible():
                  # Проверяем флаги
@@ -4745,7 +4818,7 @@ class ModernTaskManager(QMainWindow):
                  if (flags & Qt.Popup) or (flags & Qt.ToolTip):
                     widget.close()
 
-        # 3. Все QComboBox в интерфейсе
+        # 4. Все QComboBox в интерфейсе
         for combo in self.findChildren(QComboBox):
             if combo.isVisible():
                 combo.hidePopup()
@@ -4821,7 +4894,7 @@ class ModernTaskManager(QMainWindow):
         title_layout = QVBoxLayout()
         title_layout.setSpacing(2)
         
-        self.app_title_lbl = QLabel("😎 TaskMaster")
+        self.app_title_lbl = QLabel("TaskMaster")
         self.app_title_lbl.setFont(QFont("Segoe UI", 18, QFont.Bold))
         self.app_title_lbl.setStyleSheet(f"color: {THEME['text_primary']};")
         self.app_title_lbl.setTextInteractionFlags(Qt.NoTextInteraction)
@@ -4984,7 +5057,42 @@ class ModernTaskManager(QMainWindow):
         filter_header_layout.addWidget(self.task_counter)
         filter_header_layout.addStretch()
         
-        self.filter_btn = QPushButton("🔘 Фильтры: Все")
+        # Создаем кастомную кнопку, которая блокирует перетаскивание окна
+        class FilterButton(QPushButton):
+            def __init__(self, parent_window, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.parent_window = parent_window
+            
+            def mousePressEvent(self, event):
+                """Перехватываем нажатие мыши, чтобы предотвратить перетаскивание окна"""
+                if event.button() == Qt.LeftButton:
+                    # Сбрасываем позицию перетаскивания в родительском окне
+                    if hasattr(self.parent_window, 'drag_position'):
+                        self.parent_window.drag_position = None
+                    # Принимаем событие, чтобы оно не передавалось родителю
+                    event.accept()
+                super().mousePressEvent(event)
+            
+            def mouseMoveEvent(self, event):
+                """Перехватываем движение мыши, чтобы предотвратить перетаскивание окна"""
+                if event.buttons() == Qt.LeftButton:
+                    # Сбрасываем позицию перетаскивания в родительском окне
+                    if hasattr(self.parent_window, 'drag_position'):
+                        self.parent_window.drag_position = None
+                    # Принимаем событие, чтобы оно не передавалось родителю
+                    event.accept()
+                super().mouseMoveEvent(event)
+            
+            def mouseReleaseEvent(self, event):
+                """Перехватываем отпускание мыши"""
+                if event.button() == Qt.LeftButton:
+                    # Сбрасываем позицию перетаскивания в родительском окне
+                    if hasattr(self.parent_window, 'drag_position'):
+                        self.parent_window.drag_position = None
+                    event.accept()
+                super().mouseReleaseEvent(event)
+        
+        self.filter_btn = FilterButton(self, "🔘 Фильтры: Все")
         self.filter_btn.setCursor(Qt.PointingHandCursor)
         self.filter_btn.setFixedHeight(28)
         self.filter_btn.setMinimumWidth(130)
@@ -5568,13 +5676,44 @@ class ModernTaskManager(QMainWindow):
     def mouseMoveEvent(self, event):
         """Перетаскивание окна"""
         if event.buttons() == Qt.LeftButton and self.drag_position:
+            # Закрываем меню фильтров при начале перемещения
+            if self._active_filter_menu and self._active_filter_menu.isVisible():
+                self._active_filter_menu.close()
+                self._active_filter_menu = None
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
     
+    def moveEvent(self, event):
+        """Обработка перемещения окна"""
+        # Закрываем меню фильтров при перемещении окна
+        if self._active_filter_menu and self._active_filter_menu.isVisible():
+            self._active_filter_menu.close()
+            self._active_filter_menu = None
+        super().moveEvent(event)
+    
     def eventFilter(self, obj, event):
         """Фильтр событий: позиция grip и drop на кнопку выполненных задач"""
+        # Закрываем меню фильтров при перемещении главного окна
+        if obj == self and event.type() == QEvent.Move:
+            if self._active_filter_menu and self._active_filter_menu.isVisible():
+                self._active_filter_menu.close()
+                self._active_filter_menu = None
+        
+        # Предотвращаем перетаскивание окна при клике на кнопку фильтров
+        if hasattr(self, 'filter_btn') and obj == self.filter_btn:
+            if event.type() == QEvent.MouseButtonPress:
+                # Останавливаем перетаскивание окна, если оно началось
+                self.drag_position = None
+                # Принимаем событие, чтобы оно не передавалось дальше
+                return False
+            elif event.type() == QEvent.MouseMove:
+                # Если мышь движется над кнопкой, не начинаем перетаскивание
+                if event.buttons() == Qt.LeftButton:
+                    self.drag_position = None
+                return False
+        
         # Обновление позиции grip внизу окна
-        if hasattr(self, 'grip_container') and obj == self.grip_container and event.type() == event.Type.Resize:
+        if hasattr(self, 'grip_container') and obj == self.grip_container and event.type() == QEvent.Resize:
             if hasattr(self, 'grip_wrapper'):
                 # Размер кнопки 24x24, отступы контейнера 20px, позиционируем: ширина - отступ - размер кнопки
                 self.grip_wrapper.move(obj.width() - 44, obj.height() - 44)
@@ -6333,17 +6472,19 @@ class ModernTaskManager(QMainWindow):
                 latest_version = data['tag_name'].lstrip('v')
                 changelog = data.get('body', 'Нет описания изменений')
                 
-                # Ищем прямую ссылку на EXE в активах релиза
-                exe_url = None
+                # Ищем только инсталлятор в активах релиза (TaskMaster-Installer-*.exe)
+                installer_url = None
                 if 'assets' in data:
                     for asset in data['assets']:
-                        if asset['name'].lower().endswith('.exe'):
-                            exe_url = asset['browser_download_url']
+                        asset_name = asset['name']
+                        # Ищем только инсталлятор
+                        if 'installer' in asset_name.lower() and asset_name.lower().endswith('.exe'):
+                            installer_url = asset['browser_download_url']
                             break
                 
-                # Если EXE не найден (например, только исходники), используем html_url как запасной вариант
-                if not exe_url:
-                    exe_url = data.get('html_url', '')
+                # Если инсталлятор не найден, используем html_url как запасной вариант
+                if not installer_url:
+                    installer_url = data.get('html_url', '')
                 
                 progress.close()
                 
@@ -6351,7 +6492,7 @@ class ModernTaskManager(QMainWindow):
                 if self._compare_versions(latest_version, __version__) > 0:
                     # Доступно обновление - показываем badge и диалог
                     self._show_update_badge(True)
-                    dialog = UpdateDialog(self, latest_version, changelog, exe_url)
+                    dialog = UpdateDialog(self, latest_version, changelog, installer_url)
                     dialog.exec()
                 else:
                     # Уже последняя версия
@@ -7116,6 +7257,10 @@ class ModernTaskManager(QMainWindow):
         from PySide6.QtWidgets import QMenu
         from PySide6.QtGui import QAction
         
+        # Закрываем предыдущее меню, если оно открыто
+        if self._active_filter_menu:
+            self._active_filter_menu.close()
+        
         menu = QMenu(self)
         menu.setStyleSheet(f"""
             QMenu {{
@@ -7138,6 +7283,12 @@ class ModernTaskManager(QMainWindow):
                 padding-left: 10px;
             }}
         """)
+        
+        # Сохраняем ссылку на меню
+        self._active_filter_menu = menu
+        
+        # Закрываем меню при его закрытии
+        menu.aboutToHide.connect(lambda: setattr(self, '_active_filter_menu', None))
         
         filters = [
             ("all", "📋 Все задачи"),

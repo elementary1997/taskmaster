@@ -6,8 +6,19 @@ from pathlib import Path
 def build_exe():
     """
     Builds the executable using PyInstaller with all dependencies and resources.
+    
+    Режим сборки:
+    - По умолчанию: --onedir (для инсталлятора)
+    - Для одного exe: установите BUILD_MODE=onefile
     """
     print("🚀 Starting Windows build process...")
+    
+    # Проверяем режим сборки
+    build_mode = os.environ.get("BUILD_MODE", "onedir").lower()
+    if build_mode == "onedir":
+        print("📦 Режим сборки: onedir (для инсталлятора)")
+    else:
+        print("📦 Режим сборки: onefile (один exe файл)")
     
     # Base directory
     base_dir = Path(__file__).parent.resolve()
@@ -80,10 +91,13 @@ def build_exe():
         icon_file = icon_png
 
     # PyInstaller arguments - ОПТИМИЗИРОВАНО для быстрого запуска
+    # Используем --onedir для инсталлятора (все файлы в папке)
+    use_onedir = os.environ.get("BUILD_MODE", "onedir").lower() == "onedir"
+    
     args = [
         "pyinstaller",
         "--noconsole",          # Don't show console window
-        "--onefile",            # Bundle everything into one exe
+        "--onedir" if use_onedir else "--onefile",  # Bundle в папку для инсталлятора
         "--name", "TaskMaster", # Name of the executable
         "--clean",              # Clean cache
         "--windowed",           # Windows subsystem
@@ -147,14 +161,22 @@ def build_exe():
     args.append(str(script_path))
 
     print(f"📦 Building with audio resources and all PySide6 modules...")
-    print(f"Running command: pyinstaller {' '.join([a for a in args[1:] if not a.startswith('--') or a in ['--noconsole', '--onefile', '--clean', '--windowed', '--noupx']])}")
+    mode_text = "onedir" if use_onedir else "onefile"
+    print(f"Running command: pyinstaller --{mode_text} ...")
     
     try:
         subprocess.check_call(args, cwd=base_dir)
         print("\n✅ Build successful!")
-        print(f"📁 Executable is located in: {base_dir / 'dist' / 'TaskMaster.exe'}")
-        print(f"📝 Note: The audio folder will be included in the executable.")
-        print(f"   Users can add custom.wav to the audio folder next to the exe.")
+        
+        if use_onedir:
+            print(f"📁 Application is located in: {base_dir / 'dist' / 'TaskMaster'}")
+            print(f"📝 Executable: {base_dir / 'dist' / 'TaskMaster' / 'TaskMaster.exe'}")
+            print(f"\n💡 Для создания инсталлятора запустите:")
+            print(f"   python installer/build_installer.py")
+        else:
+            print(f"📁 Executable is located in: {base_dir / 'dist' / 'TaskMaster.exe'}")
+            print(f"📝 Note: The audio folder will be included in the executable.")
+            print(f"   Users can add custom.wav to the audio folder next to the exe.")
     except subprocess.CalledProcessError as e:
         print(f"\n❌ Build failed with error code {e.returncode}")
         print("💡 Try running: pip install --upgrade pyinstaller")
