@@ -88,13 +88,34 @@ def build_exe():
         "--clean",              # Clean cache
         "--windowed",           # Windows subsystem
         
-        # Только необходимые скрытые импорты (не весь PySide6!)
+        # Критически важные скрытые импорты
         "--hidden-import", "PySide6.QtWidgets",
         "--hidden-import", "PySide6.QtCore",
         "--hidden-import", "PySide6.QtGui",
         "--hidden-import", "PySide6.QtMultimedia",
         "--hidden-import", "urllib.request",
+        "--hidden-import", "urllib.error",
+        "--hidden-import", "urllib.parse",
         "--hidden-import", "json",
+        # Критически важные модули для работы Python
+        "--hidden-import", "encodings",
+        "--hidden-import", "encodings.utf_8",
+        "--hidden-import", "encodings.cp1251",
+        "--hidden-import", "encodings.latin_1",
+        "--hidden-import", "codecs",
+        "--hidden-import", "locale",
+        "--hidden-import", "winsound",
+        "--hidden-import", "threading",
+        "--hidden-import", "ctypes",
+        "--hidden-import", "ctypes.wintypes",
+        # Собираем все подмодули encodings (важно для новых ПК!)
+        "--collect-all", "encodings",
+        # Собираем все подмодули стандартной библиотеки для urllib
+        "--collect-all", "urllib",
+        "--collect-all", "http",
+        "--collect-all", "email",
+        # Включаем все необходимые модули для работы с сетью
+        "--collect-submodules", "urllib",
         
         # Включаем папку audio с звуковыми файлами
         "--add-data", f"audio{os.pathsep}audio",
@@ -108,6 +129,9 @@ def build_exe():
         # Оптимизация для быстрого запуска
         "--noupx",              # Отключаем UPX (быстрее запуск)
         "--optimize", "2",      # Оптимизация Python байткода
+        
+        # Исправление проблем с временными файлами PyInstaller
+        "--bootloader-ignore-signals",  # Игнорировать сигналы при загрузке
     ]
     
     # Добавляем иконку, если она существует

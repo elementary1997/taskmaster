@@ -53,9 +53,9 @@ def get_global_style():
             selection-color: inherit;
         }}
         QToolTip {{
-            background-color: #1a1a2e !important;
-            color: #ffffff !important;
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            background-color: {THEME['window_bg_start']} !important;
+            color: {THEME['text_primary']} !important;
+            border: 1px solid {THEME['border_color']} !important;
             border-radius: 6px !important;
             padding: 5px !important;
         }}
@@ -195,6 +195,30 @@ class SettingsManager:
         settings = SettingsManager.load()
         settings[key] = value
         SettingsManager.save(settings)
+    
+    @staticmethod
+    def get_all_tags():
+        """Получение списка всех тегов из настроек"""
+        settings = SettingsManager.load()
+        return set(settings.get("all_tags", []))
+    
+    @staticmethod
+    def add_tag(tag):
+        """Добавление тега в список всех тегов"""
+        settings = SettingsManager.load()
+        if "all_tags" not in settings:
+            settings["all_tags"] = []
+        if tag not in settings["all_tags"]:
+            settings["all_tags"].append(tag)
+            SettingsManager.save(settings)
+    
+    @staticmethod
+    def remove_tag(tag):
+        """Удаление тега из списка всех тегов"""
+        settings = SettingsManager.load()
+        if "all_tags" in settings and tag in settings["all_tags"]:
+            settings["all_tags"].remove(tag)
+            SettingsManager.save(settings)
 
 # Цветовая схема (только темная тема)
 # Цветовая схема по умолчанию (базовая темная тема)
@@ -237,71 +261,50 @@ AVAILABLE_THEMES = {
     "Изумрудный туман": {
         'window_bg_start': "#004d40",
         'window_bg_end': "#002420",
+        'card_bg': "rgba(107, 207, 127, 0.15)",
+        'card_bg_hover': "rgba(107, 207, 127, 0.25)",
+        'input_bg': "rgba(0, 36, 32, 0.5)",
+        'input_bg_focus': "rgba(0, 36, 32, 0.7)",
+        'text_primary': "#ffffff",
+        'text_secondary': "rgba(255, 255, 255, 0.8)",
+        'text_tertiary': "rgba(255, 255, 255, 0.6)",
+        'border_color': "rgba(107, 207, 127, 0.25)",
+        'grip_bg': "rgba(255, 255, 255, 0.15)",
+        'grip_bg_hover': "rgba(255, 255, 255, 0.25)",
+        'form_bg': "rgba(0, 77, 64, 0.4)",
+        'icon_color': "rgba(255, 255, 255, 0.9)",
+        'placeholder_color': "rgba(255, 255, 255, 0.5)",
         'accent_bg': "rgba(107, 207, 127, 0.4)",
         'accent_hover': "rgba(107, 207, 127, 0.6)",
         'accent_text': "#ffffff",
-        'card_bg': "rgba(107, 207, 127, 0.15)",
-        'border_color': "rgba(107, 207, 127, 0.25)"
+        'secondary_bg': "rgba(255, 255, 255, 0.1)",
+        'secondary_hover': "rgba(255, 255, 255, 0.15)",
+        'secondary_text': "#ffffff",
+        'scroll_handle': "rgba(255, 255, 255, 0.2)"
     },
     "Сапфировая ночь": {
         'window_bg_start': "#1a1a2e",
         'window_bg_end': "#16213e",
+        'card_bg': "rgba(64, 156, 255, 0.15)",
+        'card_bg_hover': "rgba(64, 156, 255, 0.25)",
+        'input_bg': "rgba(20, 20, 35, 0.5)",
+        'input_bg_focus': "rgba(20, 20, 35, 0.7)",
+        'text_primary': "#ffffff",
+        'text_secondary': "rgba(255, 255, 255, 0.8)",
+        'text_tertiary': "rgba(255, 255, 255, 0.6)",
+        'border_color': "rgba(64, 156, 255, 0.25)",
+        'grip_bg': "rgba(255, 255, 255, 0.15)",
+        'grip_bg_hover': "rgba(255, 255, 255, 0.25)",
+        'form_bg': "rgba(30, 30, 50, 0.4)",
+        'icon_color': "rgba(255, 255, 255, 0.9)",
+        'placeholder_color': "rgba(255, 255, 255, 0.5)",
         'accent_bg': "rgba(64, 156, 255, 0.4)",
         'accent_hover': "rgba(64, 156, 255, 0.6)",
         'accent_text': "#ffffff",
-        'card_bg': "rgba(64, 156, 255, 0.15)",
-        'border_color': "rgba(64, 156, 255, 0.25)"
-    },
-    "Аметистовый сон": {
-        'window_bg_start': "#1c1024",
-        'window_bg_end': "#bc96e6",
-        'accent_bg': "rgba(188, 150, 230, 0.4)",
-        'accent_hover': "rgba(188, 150, 230, 0.6)",
-        'accent_text': "#ffffff",
-        'card_bg': "rgba(188, 150, 230, 0.12)",
-        'border_color': "rgba(188, 150, 230, 0.2)"
-    },
-    "Закатное сияние": {
-        'window_bg_start': "#2e1a12",
-        'window_bg_end': "#f3cfa0",
-        'accent_bg': "rgba(243, 207, 160, 0.4)",
-        'accent_hover': "rgba(243, 207, 160, 0.6)",
-        'accent_text': "#3d2a1a",
-        'card_bg': "rgba(243, 207, 160, 0.12)",
-        'border_color': "rgba(243, 207, 160, 0.2)"
-    },
-    "Рубиновый бархат": {
-        'window_bg_start': "#2b0f14",
-        'window_bg_end': "#e6a1b5",
-        'accent_bg': "rgba(230, 161, 181, 0.4)",
-        'accent_hover': "rgba(230, 161, 181, 0.6)",
-        'accent_text': "#ffffff",
-        'card_bg': "rgba(230, 161, 181, 0.12)",
-        'border_color': "rgba(230, 161, 181, 0.2)"
-    },
-    "Светлая лазурь": {
-        'window_bg_start': "#f0f2f5",
-        'window_bg_end': "#e0e5ec",
-        'card_bg': "rgba(255, 255, 255, 0.8)",
-        'card_bg_hover': "rgba(255, 255, 255, 0.95)",
-        'input_bg': "rgba(255, 255, 255, 1.0)",
-        'input_bg_focus': "rgba(255, 255, 255, 1.0)",
-        'text_primary': "#1a1a2e",
-        'text_secondary': "#4b5563",
-        'text_tertiary': "#9ca3af",
-        'border_color': "rgba(0, 0, 0, 0.1)",
-        'grip_bg': "rgba(0, 0, 0, 0.05)",
-        'grip_bg_hover': "rgba(0, 0, 0, 0.1)",
-        'form_bg': "rgba(240, 242, 245, 0.5)",
-        'icon_color': "#1a1a2e",
-        'placeholder_color': "#9ca3af",
-        'accent_bg': "rgba(59, 130, 246, 0.5)",
-        'accent_hover': "rgba(59, 130, 246, 0.7)",
-        'accent_text': "#ffffff",
-        'secondary_bg': "rgba(0, 0, 0, 0.05)",
-        'secondary_hover': "rgba(0, 0, 0, 0.1)",
-        'secondary_text': "#1a1a2e",
-        'scroll_handle': "rgba(0, 0, 0, 0.2)"
+        'secondary_bg': "rgba(255, 255, 255, 0.1)",
+        'secondary_hover': "rgba(255, 255, 255, 0.15)",
+        'secondary_text': "#ffffff",
+        'scroll_handle': "rgba(255, 255, 255, 0.2)"
     },
     "Windows 11 Dark": {
         'window_bg_start': "#1d1d1d",
@@ -476,6 +479,7 @@ class Task:
     time_log: Dict[str, int] = field(default_factory=dict) # Лог времени по дням {"yyyy-MM-dd": seconds}
     is_running: bool = False  # Флаг запущенного таймера
     completion_date: Optional[str] = None  # Дата завершения в формате "dd.MM.yyyy HH:mm"
+    tags: List[str] = field(default_factory=list)  # Список тегов задачи
 
 
 class TaskStorage:
@@ -507,6 +511,8 @@ class TaskStorage:
                          item["is_running"] = False
                     if "completion_date" not in item:
                         item["completion_date"] = None
+                    if "tags" not in item:
+                        item["tags"] = []
                     tasks.append(Task(**item))
                 return tasks
         except Exception as e:
@@ -996,7 +1002,7 @@ class CloseButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Фон (Красный)
+        # Фон (Красный при наведении)
         rect = self.rect()
         if self.isDown():
             painter.setBrush(QColor(200, 50, 50))
@@ -1009,8 +1015,24 @@ class CloseButton(QPushButton):
         # Отступ 2 пикселя
         painter.drawEllipse(rect.adjusted(2, 2, -2, -2))
         
-        # Крестик
-        painter.setPen(QPen(QColor(255, 255, 255), 2.5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        # Крестик - определяем цвет в зависимости от типа темы
+        # Если тема темная (белый текст), используем белый цвет для кнопки
+        # Если тема светлая (темный текст), используем черный цвет для кнопки
+        text_color = THEME.get('text_primary', '#ffffff')
+        # Проверяем, является ли цвет светлым (темная тема) или темным (светлая тема)
+        is_dark_theme = text_color.lower().startswith('#fff') or '255' in text_color.lower()
+        
+        if self.underMouse() or self.isDown():
+            # При наведении (красный фон) всегда белый для контраста
+            icon_color = QColor(255, 255, 255)
+        elif is_dark_theme:
+            # Темная тема - белый крестик
+            icon_color = QColor(255, 255, 255)
+        else:
+            # Светлая тема - черный крестик
+            icon_color = QColor(0, 0, 0)
+        
+        painter.setPen(QPen(icon_color, 2.5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         
         # Используем float для точности
         c = list(rect.center().toTuple()) # получаем (x, y)
@@ -1051,8 +1073,24 @@ class MinimizeButton(QPushButton):
             painter.setPen(Qt.NoPen)
             painter.drawEllipse(rect.adjusted(2, 2, -2, -2))
         
-        # Белый минус
-        painter.setPen(QColor(255, 255, 255))
+        # Минус - определяем цвет в зависимости от типа темы
+        # Если тема темная (белый текст), используем белый цвет для кнопки
+        # Если тема светлая (темный текст), используем черный цвет для кнопки
+        text_color = THEME.get('text_primary', '#ffffff')
+        # Проверяем, является ли цвет светлым (темная тема) или темным (светлая тема)
+        is_dark_theme = text_color.lower().startswith('#fff') or '255' in text_color.lower()
+        
+        if self.underMouse() or self.isDown():
+            # При наведении (желтый фон) всегда черный для контраста
+            icon_color = QColor(0, 0, 0)
+        elif is_dark_theme:
+            # Темная тема - белый минус
+            icon_color = QColor(255, 255, 255)
+        else:
+            # Светлая тема - черный минус
+            icon_color = QColor(0, 0, 0)
+        
+        painter.setPen(icon_color)
         font = QFont("Segoe UI", 16, QFont.Bold) # Чуть крупнее для минуса
         painter.setFont(font)
         # Убираем сильное смещение вверх, минус обычно центрирован лучше
@@ -1337,6 +1375,61 @@ class TaskDialog(DraggableDialog):
         """)
         layout.addWidget(self.repeat_combo)
         
+        # Теги
+        tags_label = QLabel("Теги")
+        tags_label.setFont(QFont("Segoe UI", 10))
+        tags_label.setStyleSheet(f"color: {THEME['text_secondary']}; background: transparent; border: none; outline: none;")
+        tags_label.setTextInteractionFlags(Qt.NoTextInteraction)
+        tags_label.setFocusPolicy(Qt.NoFocus)
+        layout.addWidget(tags_label)
+        
+        # Контейнер для тегов
+        tags_container = QFrame()
+        tags_container.setStyleSheet(f"""
+            QFrame {{
+                background-color: {THEME['input_bg']};
+                border: 0px;
+                border-radius: 8px;
+                padding: 8px;
+            }}
+        """)
+        tags_layout = QVBoxLayout(tags_container)
+        tags_layout.setContentsMargins(8, 8, 8, 8)
+        tags_layout.setSpacing(6)
+        
+        # Виджет для отображения выбранных тегов
+        self.selected_tags_widget = QWidget()
+        self.selected_tags_layout = QHBoxLayout()
+        self.selected_tags_layout.setContentsMargins(0, 0, 0, 0)
+        self.selected_tags_layout.setSpacing(4)
+        self.selected_tags_widget.setLayout(self.selected_tags_layout)
+        self.selected_tags_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        tags_layout.addWidget(self.selected_tags_widget)
+        
+        # Кнопка добавления тега
+        add_tag_btn = QPushButton("+ Добавить тег")
+        add_tag_btn.setFont(QFont("Segoe UI", 9))
+        add_tag_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        add_tag_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['secondary_bg']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 6px;
+                padding: 6px 12px;
+                color: {THEME['text_primary']};
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+            }}
+        """)
+        add_tag_btn.clicked.connect(self._show_tags_dialog)
+        tags_layout.addWidget(add_tag_btn)
+        
+        layout.addWidget(tags_container)
+        
+        # Хранилище выбранных тегов
+        self.selected_tags = []
+        
         # Информационные поля (Дата создания/выполнения)
         info_layout = QVBoxLayout()
         info_layout.setSpacing(4)
@@ -1473,6 +1566,92 @@ class TaskDialog(DraggableDialog):
             # Заполнение поля повторения
             repeat_map = {None: 0, "daily": 1, "weekly": 2, "monthly": 3}
             self.repeat_combo.setCurrentIndex(repeat_map.get(self.task.repeat_type, 0))
+            
+            # Заполнение тегов
+            if hasattr(self.task, 'tags') and self.task.tags:
+                self.selected_tags = self.task.tags.copy()
+                self._update_selected_tags()
+            
+            # Заполнение тегов
+            if hasattr(self.task, 'tags') and self.task.tags:
+                self.selected_tags = self.task.tags.copy()
+                self._update_selected_tags()
+    
+    def _show_tags_dialog(self):
+        """Показ диалога выбора тегов"""
+        dialog = TagsDialog(self, self.selected_tags)
+        if dialog.exec():
+            self.selected_tags = dialog.get_selected_tags()
+            self._update_selected_tags()
+    
+    def _update_selected_tags(self):
+        """Обновление отображения выбранных тегов"""
+        # Очищаем текущие теги
+        while self.selected_tags_layout.count():
+            item = self.selected_tags_layout.takeAt(0)
+            if item:
+                widget = item.widget()
+                if widget:
+                    widget.setParent(None)  # Отключаем от родителя перед удалением
+                    widget.deleteLater()
+                else:
+                    # Удаляем stretch или другие элементы
+                    self.selected_tags_layout.removeItem(item)
+        
+        # Добавляем выбранные теги
+        for tag in self.selected_tags:
+            tag_widget = QFrame()
+            tag_widget.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {THEME['accent_bg']};
+                    border: 1px solid {THEME['accent_hover']};
+                    border-radius: 12px;
+                    padding: 4px 8px;
+                }}
+            """)
+            tag_layout = QHBoxLayout(tag_widget)
+            tag_layout.setContentsMargins(4, 2, 4, 2)
+            tag_layout.setSpacing(4)
+            
+            tag_label = QLabel(tag)
+            tag_label.setFont(QFont("Segoe UI", 9))
+            tag_label.setStyleSheet(f"color: {THEME['accent_text']};")
+            tag_layout.addWidget(tag_label)
+            
+            remove_btn = QPushButton("×")
+            remove_btn.setFixedSize(16, 16)
+            remove_btn.setFont(QFont("Segoe UI", 10, QFont.Bold))
+            remove_btn.setCursor(QCursor(Qt.PointingHandCursor))
+            remove_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    border: none;
+                    color: {THEME['accent_text']};
+                    border-radius: 8px;
+                }}
+                QPushButton:hover {{
+                    background-color: rgba(255, 255, 255, 0.2);
+                }}
+            """)
+            remove_btn.clicked.connect(lambda checked, t=tag: self._remove_tag(t))
+            tag_layout.addWidget(remove_btn)
+            
+            self.selected_tags_layout.addWidget(tag_widget)
+        
+        self.selected_tags_layout.addStretch()
+    
+    def _remove_tag(self, tag):
+        """Удаление тега из списка выбранных тегов для этой задачи (не из системы)"""
+        try:
+            if tag in self.selected_tags:
+                # Удаляем тег только из локального списка этой задачи
+                # Тег остается в системе и может быть использован в других задачах
+                self.selected_tags.remove(tag)
+                self._update_selected_tags()
+        except Exception as e:
+            print(f"Ошибка при удалении тега: {e}")
+            import traceback
+            traceback.print_exc()
     
     def get_data(self):
         """Получение данных из формы"""
@@ -1484,9 +1663,955 @@ class TaskDialog(DraggableDialog):
             "description": self.description_input.toPlainText().strip(),
             "priority": priority_map[self.priority_combo.currentIndex()],
             "due_date": self.current_due_date.toString("yyyy-MM-dd"),
-            "repeat_type": repeat_map[self.repeat_combo.currentIndex()]
+            "repeat_type": repeat_map[self.repeat_combo.currentIndex()],
+            "tags": self.selected_tags.copy()
         }
 
+
+class TagsDialog(DraggableDialog):
+    """Диалог для выбора и создания тегов"""
+    
+    def __init__(self, parent=None, selected_tags=None):
+        super().__init__(parent)
+        self.selected_tags = selected_tags.copy() if selected_tags else []
+        self.setWindowTitle("Управление тегами")
+        self.setModal(True)
+        self.setMinimumWidth(400)
+        # Убираем фиксированную минимальную высоту - будет подстраиваться под содержимое
+        
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        """Настройка интерфейса диалога"""
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Контейнер с фоном
+        self.container = QFrame()
+        self.container.setObjectName("tagsDialogContainer")
+        self.container.setStyleSheet(f"""
+            QFrame#tagsDialogContainer {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 {THEME['window_bg_start']},
+                    stop:1 {THEME['window_bg_end']}
+                );
+                border-radius: 20px;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+            }}
+        """)
+        main_layout.addWidget(self.container)
+        
+        self.apply_standard_shadow(self.container)
+        
+        layout = QVBoxLayout(self.container)
+        layout.setContentsMargins(24, 24, 24, 40)
+        layout.setSpacing(16)
+        
+        # Заголовок
+        header_layout = QHBoxLayout()
+        title_label = QLabel("🏷️ Управление тегами")
+        title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        title_label.setStyleSheet(f"color: {THEME['text_primary']}; background: transparent; border: none;")
+        title_label.setTextInteractionFlags(Qt.NoTextInteraction)
+        title_label.setFocusPolicy(Qt.NoFocus)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        
+        close_btn = CloseButton()
+        close_btn.clicked.connect(self.reject)
+        header_layout.addWidget(close_btn)
+        layout.addLayout(header_layout)
+        
+        # Создание нового тега
+        new_tag_label = QLabel("Создать новый тег")
+        new_tag_label.setFont(QFont("Segoe UI", 10))
+        new_tag_label.setStyleSheet(f"color: {THEME['text_secondary']}; background: transparent; border: none;")
+        new_tag_label.setTextInteractionFlags(Qt.NoTextInteraction)
+        new_tag_label.setFocusPolicy(Qt.NoFocus)
+        layout.addWidget(new_tag_label)
+        
+        new_tag_layout = QHBoxLayout()
+        new_tag_layout.setSpacing(8)
+        
+        self.new_tag_input = QLineEdit()
+        self.new_tag_input.setPlaceholderText("Введите название тега")
+        self.new_tag_input.setFont(QFont("Segoe UI", 10))
+        self.new_tag_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {THEME['input_bg']};
+                border: 0px;
+                border-radius: 8px;
+                padding: 10px 12px;
+                color: {THEME['text_primary']};
+            }}
+            QLineEdit:focus {{
+                background-color: {THEME['input_bg_focus']};
+            }}
+        """)
+        new_tag_layout.addWidget(self.new_tag_input)
+        
+        add_btn = QPushButton("Добавить")
+        add_btn.setFont(QFont("Segoe UI", 10))
+        add_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        add_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['accent_bg']};
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                color: {THEME['accent_text']};
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['accent_hover']};
+            }}
+        """)
+        add_btn.clicked.connect(self._add_new_tag)
+        new_tag_layout.addWidget(add_btn)
+        
+        layout.addLayout(new_tag_layout)
+        
+        # Список существующих тегов
+        existing_label = QLabel("Существующие теги")
+        existing_label.setFont(QFont("Segoe UI", 10))
+        existing_label.setStyleSheet(f"color: {THEME['text_secondary']}; background: transparent; border: none;")
+        existing_label.setTextInteractionFlags(Qt.NoTextInteraction)
+        existing_label.setFocusPolicy(Qt.NoFocus)
+        layout.addWidget(existing_label)
+        
+        # Скроллируемая область для тегов (максимум 5 тегов видно)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: {THEME['form_bg']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 8px;
+            }}
+        """)
+        # Высота для 5 тегов: примерно 45px на тег * 5 = 225px + отступы 16px = 241px
+        scroll.setMaximumHeight(241)
+        scroll.setMinimumHeight(0)  # Минимум 0, чтобы подстраивалось под содержимое
+        
+        tags_widget = QWidget()
+        tags_widget.setStyleSheet(f"""
+            QWidget {{
+                background-color: {THEME['form_bg']};
+            }}
+        """)
+        self.tags_layout = QVBoxLayout(tags_widget)
+        self.tags_layout.setContentsMargins(8, 8, 8, 8)
+        self.tags_layout.setSpacing(6)
+        
+        scroll.setWidget(tags_widget)
+        layout.addWidget(scroll)
+        
+        self.tags_widget = tags_widget
+        self.scroll_area = scroll  # Сохраняем ссылку для обновления размера
+        self._load_tags()
+        
+        # После загрузки тегов обновляем размер и фиксируем его
+        QTimer.singleShot(100, self._fix_dialog_size)
+        
+        # Кнопки
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+        buttons_layout.addStretch()
+        
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.setFont(QFont("Segoe UI", 10))
+        cancel_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['secondary_bg']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 8px;
+                padding: 10px 20px;
+                color: {THEME['text_primary']};
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+            }}
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        buttons_layout.addWidget(cancel_btn)
+        
+        ok_btn = QPushButton("✓ Применить")
+        ok_btn.setFont(QFont("Segoe UI", 10))
+        ok_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        ok_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['accent_bg']};
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                color: {THEME['accent_text']};
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['accent_hover']};
+            }}
+        """)
+        ok_btn.clicked.connect(self.accept)
+        buttons_layout.addWidget(ok_btn)
+        
+        layout.addLayout(buttons_layout)
+        
+        self.add_grip(self.container)
+        
+        # Подключаем Enter для добавления тега
+        self.new_tag_input.returnPressed.connect(self._add_new_tag)
+    
+    def _load_tags(self):
+        """Загрузка списка всех тегов из настроек и задач"""
+        # Загружаем все теги из настроек (постоянное хранилище)
+        all_tags = SettingsManager.get_all_tags()
+        
+        # Также добавляем теги из задач (на случай если есть теги, которые еще не в настройках)
+        parent_window = self.parent()
+        window = parent_window
+        while window and not hasattr(window, 'tasks'):
+            if hasattr(window, 'parent'):
+                window = window.parent()
+            elif hasattr(window, 'parent_window'):
+                window = window.parent_window
+            else:
+                break
+        
+        if window and hasattr(window, 'tasks'):
+            tasks = window.tasks
+            for task in tasks:
+                if hasattr(task, 'tags') and task.tags:
+                    all_tags.update(task.tags)
+                    # Сохраняем теги из задач в настройки (на случай если их там еще нет)
+                    for tag in task.tags:
+                        SettingsManager.add_tag(tag)
+        
+        # Добавляем уже выбранные теги, если их нет в списке
+        all_tags.update(self.selected_tags)
+        
+        # Очищаем текущий layout
+        while self.tags_layout.count():
+            item = self.tags_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Создаем виджеты для каждого тега с кнопкой удаления
+        for tag in sorted(all_tags):
+            tag_widget = QFrame()
+            tag_widget.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {THEME['form_bg']};
+                    border: 1px solid {THEME['border_color']};
+                    border-radius: 8px;
+                    padding: 0px;
+                }}
+            """)
+            tag_layout = QHBoxLayout(tag_widget)
+            tag_layout.setContentsMargins(8, 6, 6, 6)
+            tag_layout.setSpacing(8)
+            
+            checkbox = QPushButton()  # Используем кнопку вместо чекбокса для лучшего вида
+            checkbox.setCheckable(True)
+            checkbox.setChecked(tag in self.selected_tags)
+            checkbox.setText(f"🏷️ {tag}")
+            checkbox.setFont(QFont("Segoe UI", 10))
+            checkbox.setCursor(QCursor(Qt.PointingHandCursor))
+            checkbox.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    border: none;
+                    color: {THEME['text_primary']};
+                    text-align: left;
+                    padding: 4px 8px;
+                }}
+                QPushButton:hover {{
+                    background-color: {THEME['card_bg_hover']};
+                    border-radius: 4px;
+                }}
+                QPushButton:checked {{
+                    background-color: {THEME['accent_bg']};
+                    color: {THEME['accent_text']};
+                    border-radius: 4px;
+                }}
+            """)
+            checkbox.clicked.connect(lambda checked, t=tag: self._toggle_tag(t, checked))
+            tag_layout.addWidget(checkbox)
+            
+            # Кнопка удаления тега из системы
+            delete_btn = QPushButton("🗑️")
+            delete_btn.setFixedSize(24, 24)
+            delete_btn.setCursor(QCursor(Qt.PointingHandCursor))
+            delete_btn.setToolTip("Удалить тег из системы")
+            delete_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    border: none;
+                    color: {THEME['text_secondary']};
+                    border-radius: 4px;
+                    font-size: 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: rgba(255, 0, 0, 0.2);
+                    color: #ff6b6b;
+                }}
+            """)
+            delete_btn.clicked.connect(lambda checked, t=tag: self._delete_tag_from_system(t))
+            tag_layout.addWidget(delete_btn)
+            
+            self.tags_layout.addWidget(tag_widget)
+        
+        # Размер уже будет обновлен в _fix_dialog_size, не нужно вызывать здесь
+    
+    def _adjust_tags_area_size(self):
+        """Подстройка размера области тегов: минимум под содержимое, максимум на 5 тегов"""
+        if not hasattr(self, 'scroll_area') or not hasattr(self, 'tags_widget'):
+            return
+        
+        # Вычисляем нужную высоту на основе количества тегов
+        tag_count = self.tags_layout.count()
+        if tag_count == 0:
+            # Если тегов нет, минимальная высота
+            self.scroll_area.setMinimumHeight(0)
+            self.scroll_area.setMaximumHeight(241)
+        else:
+            # Высота одного тега примерно 45px (отступы + контент)
+            # Отступы layout: 8px сверху + 8px снизу = 16px
+            # Spacing между тегами: 6px * (количество - 1)
+            spacing = 6 * (tag_count - 1) if tag_count > 1 else 0
+            content_height = (45 * tag_count) + 16 + spacing
+            
+            # Максимум на 5 тегов
+            max_height = 241
+            # Минимум - под содержимое, но не больше максимума
+            min_height = min(content_height, max_height)
+            
+            self.scroll_area.setMinimumHeight(min_height)
+            self.scroll_area.setMaximumHeight(max_height)
+    
+    def _fix_dialog_size(self):
+        """Фиксация размера диалога после первоначальной настройки"""
+        # Сначала настраиваем размер области тегов
+        self._adjust_tags_area_size()
+        # Затем фиксируем размер всего диалога
+        self.adjustSize()
+        # Сохраняем текущий размер и фиксируем его
+        current_size = self.size()
+        self._fixed_size = current_size
+        self.setFixedSize(current_size)
+        self._dialog_size_fixed = True
+    
+    def _restore_dialog_size_after_update(self, saved_size):
+        """Восстановление размера диалога после обновления списка тегов"""
+        # Обновляем размер области тегов
+        self._adjust_tags_area_size()
+        # Восстанавливаем сохраненный размер
+        self.setFixedSize(saved_size)
+        self._fixed_size = saved_size
+    
+    def _toggle_tag(self, tag, checked):
+        """Переключение выбора тега"""
+        # Сохраняем текущий размер диалога перед изменением
+        if not hasattr(self, '_dialog_size_fixed'):
+            return
+        
+        if checked:
+            if tag not in self.selected_tags:
+                self.selected_tags.append(tag)
+        else:
+            if tag in self.selected_tags:
+                self.selected_tags.remove(tag)
+        
+        # Восстанавливаем размер, если он изменился
+        if hasattr(self, '_fixed_size'):
+            self.setFixedSize(self._fixed_size)
+    
+    def _add_new_tag(self):
+        """Добавление нового тега"""
+        tag_text = self.new_tag_input.text().strip()
+        if tag_text:
+            # Сохраняем тег в настройки (постоянное хранилище)
+            SettingsManager.add_tag(tag_text)
+            
+            if tag_text not in self.selected_tags:
+                self.selected_tags.append(tag_text)
+            
+            # Сохраняем текущий размер перед обновлением
+            if hasattr(self, '_fixed_size'):
+                saved_size = self._fixed_size
+            else:
+                saved_size = self.size()
+            
+            self.new_tag_input.clear()
+            self._load_tags()
+            
+            # Обновляем размер области тегов и восстанавливаем размер диалога
+            QTimer.singleShot(50, lambda: self._restore_dialog_size_after_update(saved_size))
+            # Автоматически выбираем новый тег
+            QTimer.singleShot(100, lambda: self._select_tag_after_load(tag_text))
+    
+    def _select_tag_after_load(self, tag_text):
+        """Выбор тега после загрузки списка"""
+        for i in range(self.tags_layout.count()):
+            item = self.tags_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                # Ищем кнопку с этим тегом
+                for child in widget.findChildren(QPushButton):
+                    if child.isCheckable() and tag_text in child.text():
+                        child.setChecked(True)
+                        break
+    
+    def _delete_tag_from_system(self, tag):
+        """Удаление тега из всех задач в системе"""
+        from PySide6.QtWidgets import QMessageBox
+        
+        reply = QMessageBox.question(
+            self,
+            "Удаление тега",
+            f"Вы уверены, что хотите удалить тег '{tag}' из всех задач?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Ищем ModernTaskManager через цепочку parent
+            parent_window = self.parent()
+            window = parent_window
+            while window and not hasattr(window, 'tasks'):
+                if hasattr(window, 'parent'):
+                    window = window.parent()
+                elif hasattr(window, 'parent_window'):
+                    window = window.parent_window
+                else:
+                    break
+            
+            if window and hasattr(window, 'tasks'):
+                # Удаляем тег из всех задач
+                removed_count = 0
+                for task in window.tasks:
+                    if hasattr(task, 'tags') and task.tags and tag in task.tags:
+                        task.tags.remove(tag)
+                        removed_count += 1
+                
+                # Сохраняем изменения в задачах
+                if removed_count > 0:
+                    TaskStorage.save(window.tasks)
+                    window._refresh_tasks()
+                
+                # Удаляем тег из постоянного хранилища
+                SettingsManager.remove_tag(tag)
+                
+                # Сохраняем текущий размер перед обновлением
+                if hasattr(self, '_fixed_size'):
+                    saved_size = self._fixed_size
+                else:
+                    saved_size = self.size()
+                
+                # Обновляем список тегов в диалоге
+                self._load_tags()
+                
+                # Обновляем размер области тегов и восстанавливаем размер диалога
+                QTimer.singleShot(50, lambda: self._restore_dialog_size_after_update(saved_size))
+                
+                QMessageBox.information(
+                    self,
+                    "Тег удален",
+                    f"Тег '{tag}' удален из {removed_count} задач и из системы."
+                )
+    
+    def get_selected_tags(self):
+        """Получение списка выбранных тегов"""
+        return self.selected_tags.copy()
+
+
+class NotificationButton(QPushButton):
+    """Кнопка уведомлений с индикатором"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(ZoomManager.scaled(32), ZoomManager.scaled(32))
+        self.setCursor(QCursor(Qt.PointingHandCursor))
+        self.has_notifications = False
+        self.setStyleSheet("background: transparent; border: none;")
+        
+        # Регистрируем callback для обновления при изменении масштаба
+        ZoomManager.add_callback(self._update_scale)
+        
+    def _update_scale(self):
+        """Обновление размера при изменении масштаба"""
+        self.setFixedSize(ZoomManager.scaled(32), ZoomManager.scaled(32))
+        self.update()
+        
+    def set_notification_state(self, has_notifications):
+        self.has_notifications = has_notifications
+        self.update()
+        
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Icon (Bell)
+        painter.setPen(QColor(THEME['text_secondary']))
+        if self.has_notifications:
+            painter.setPen(QColor(THEME['text_primary']))
+            
+        font = QFont("Segoe UI Emoji", ZoomManager.scaled(14))
+        painter.setFont(font)
+        painter.drawText(self.rect(), Qt.AlignCenter, "🔔")
+        
+        # Red Badge
+        if self.has_notifications:
+            size = self.width()
+            badge_size = ZoomManager.scaled(8)
+            badge_x = size - badge_size - ZoomManager.scaled(2)
+            badge_y = ZoomManager.scaled(4)
+            painter.setBrush(QColor("#ff4444"))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(int(badge_x), int(badge_y), int(badge_size), int(badge_size))
+
+class NotificationDialog(DraggableDialog):
+    """Диалог с уведомлениями о просроченных задачах"""
+    def __init__(self, parent, overdue_tasks):
+        super().__init__(parent)
+        self.overdue_tasks = overdue_tasks
+        self.settings_manager = parent.settings_manager if hasattr(parent, 'settings_manager') else SettingsManager()
+        self.parent_window = parent
+        
+        self.setWindowTitle("Уведомления")
+        self.setMinimumWidth(ZoomManager.scaled(320))
+        self.resize(ZoomManager.scaled(320), ZoomManager.scaled(400))
+        
+        # Отслеживаем перемещение главного окна для обновления позиции
+        if parent:
+            parent.installEventFilter(self)
+        
+         # Основной лейаут для тени
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(
+            ZoomManager.scaled(15), 
+            ZoomManager.scaled(15), 
+            ZoomManager.scaled(15), 
+            ZoomManager.scaled(15)
+        )
+        
+        self.container = QFrame()
+        self.container.setObjectName("notifyContainer")
+        self._update_container_style()
+        main_layout.addWidget(self.container)
+        self.apply_standard_shadow(self.container)
+        
+        self._setup_ui()
+        
+        # Отслеживаем перемещение главного окна для обновления позиции
+        if parent:
+            parent.installEventFilter(self)
+        
+        # Регистрируем callback для обновления при изменении масштаба
+        ZoomManager.add_callback(self.update_ui_scale)
+        
+    def _update_container_style(self):
+        """Обновление стиля контейнера с учетом масштаба"""
+        self.container.setStyleSheet(f"""
+            QFrame#notifyContainer {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 {THEME['window_bg_start']},
+                    stop:1 {THEME['window_bg_end']}
+                );
+                border: 1px solid {THEME['border_color']};
+                border-radius: {ZoomManager.scaled(20)}px;
+            }}
+        """)
+        
+    def _setup_ui(self):
+        layout = QVBoxLayout(self.container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Header ( draggable block )
+        header_frame = QFrame()
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(
+            ZoomManager.scaled(20), 
+            ZoomManager.scaled(20), 
+            ZoomManager.scaled(20), 
+            ZoomManager.scaled(10)
+        )
+        
+        # Заголовок меняется в зависимости от наличия уведомлений
+        if self.overdue_tasks:
+            title_text = "⚠️ Просроченные задачи"
+        else:
+            title_text = "🔔 Уведомления"
+        self.title = QLabel(title_text)
+        self.title.setFont(ZoomManager.font("Segoe UI", 16, QFont.Bold))
+        self.title.setStyleSheet(f"color: {THEME['text_primary']}; background: transparent; border: none;")
+        header_layout.addWidget(self.title)
+        
+        header_layout.addStretch()
+        
+        self.close_btn = QPushButton("✕")
+        self.close_btn.setFixedSize(ZoomManager.scaled(30), ZoomManager.scaled(30))
+        self.close_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._update_close_btn_style()
+        self.close_btn.clicked.connect(self.close)
+        header_layout.addWidget(self.close_btn)
+        
+        layout.addWidget(header_frame)
+        
+        # List
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet("background: transparent; border: none;")
+        
+        self.content = QWidget()
+        self.content.setStyleSheet("background: transparent;")
+        self.content_layout = QVBoxLayout(self.content)
+        self.content_layout.setSpacing(ZoomManager.scaled(10))
+        self.content_layout.setContentsMargins(
+            ZoomManager.scaled(20), 
+            0, 
+            ZoomManager.scaled(20), 
+            ZoomManager.scaled(10)
+        )
+        
+        self.task_items = []  # Сохраняем ссылки на элементы задач
+        
+        if not self.overdue_tasks:
+            # Если уведомлений нет, показываем сообщение
+            no_notifications_label = QLabel("✅ У вас нет уведомлений")
+            no_notifications_label.setFont(ZoomManager.font("Segoe UI", 14))
+            no_notifications_label.setStyleSheet(f"""
+                color: {THEME['text_secondary']};
+                background: transparent;
+                border: none;
+                padding: {ZoomManager.scaled(20)}px;
+            """)
+            no_notifications_label.setAlignment(Qt.AlignCenter)
+            self.content_layout.addWidget(no_notifications_label)
+        else:
+            # Показываем список просроченных задач
+            for task in self.overdue_tasks:
+                # Создаем кастомный QFrame с обработчиком клика
+                class TaskItemFrame(QFrame):
+                    def __init__(self, parent_dialog, task_item):
+                        super().__init__()
+                        self.parent_dialog = parent_dialog
+                        self.task_item = task_item
+                        self.setCursor(QCursor(Qt.PointingHandCursor))
+                    
+                    def mousePressEvent(self, event):
+                        if event.button() == Qt.LeftButton:
+                            self.parent_dialog._open_task(self.task_item)
+                        super().mousePressEvent(event)
+                
+                item = TaskItemFrame(self, task)
+                item.setStyleSheet(f"""
+                    QFrame {{
+                        background: {THEME['card_bg']};
+                        border-radius: {ZoomManager.scaled(10)}px;
+                        border: 1px solid {THEME['border_color']};
+                    }}
+                    QFrame:hover {{
+                        background: {THEME['card_bg_hover']};
+                        border: 1px solid {THEME.get('accent_hover', THEME['border_color'])};
+                    }}
+                """)
+                item_layout = QVBoxLayout(item)
+                item_layout.setContentsMargins(
+                    ZoomManager.scaled(15), 
+                    ZoomManager.scaled(10), 
+                    ZoomManager.scaled(15), 
+                    ZoomManager.scaled(10)
+                )
+                
+                t_title = QLabel(task.title)
+                t_title.setFont(QFont("Segoe UI", 10, QFont.Medium))
+                t_title.setStyleSheet("border: none; background: transparent; color: #ff6b6b;")
+                t_title.setWordWrap(True)
+                
+                # Форматируем дату в формат DD.MM.YYYY
+                try:
+                    task_date = QDate.fromString(task.due_date, "yyyy-MM-dd")
+                    if task_date.isValid():
+                        formatted_date = task_date.toString("dd.MM.yyyy")
+                    else:
+                        formatted_date = task.due_date  # Если не удалось распарсить, оставляем как есть
+                except:
+                    formatted_date = task.due_date  # Если ошибка, оставляем как есть
+                
+                t_date = QLabel(f"Срок: {formatted_date}")
+                t_date.setFont(QFont("Segoe UI", 8))
+                t_date.setStyleSheet(f"border: none; background: transparent; color: {THEME['text_secondary']};")
+                
+                item_layout.addWidget(t_title)
+                item_layout.addWidget(t_date)
+                
+                self.task_items.append((item, t_title, t_date, task))
+                self.content_layout.addWidget(item)
+        
+        self.content_layout.addStretch()
+        self.scroll.setWidget(self.content)
+        layout.addWidget(self.scroll)
+        
+        # Footer
+        footer_frame = QFrame()
+        footer_layout = QVBoxLayout(footer_frame)
+        footer_layout.setContentsMargins(
+            ZoomManager.scaled(20), 
+            ZoomManager.scaled(10), 
+            ZoomManager.scaled(20), 
+            ZoomManager.scaled(20)
+        )
+        
+        # Кнопка "Очистить уведомления" показывается только если есть уведомления
+        if self.overdue_tasks:
+            self.clear_btn = QPushButton("Очистить уведомления")
+            self.clear_btn.setCursor(Qt.PointingHandCursor)
+            self.clear_btn.setFont(ZoomManager.font("Segoe UI", 10))
+            self._update_clear_btn_style()
+            self.clear_btn.clicked.connect(self._clear_and_close)
+            footer_layout.addWidget(self.clear_btn)
+        else:
+            # Если уведомлений нет, показываем кнопку "Закрыть"
+            self.close_dialog_btn = QPushButton("Закрыть")
+            self.close_dialog_btn.setCursor(Qt.PointingHandCursor)
+            self.close_dialog_btn.setFont(ZoomManager.font("Segoe UI", 10))
+            self.close_dialog_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {THEME['secondary_bg']};
+                    color: {THEME['text_primary']};
+                    border: 1px solid {THEME['border_color']};
+                    border-radius: {ZoomManager.scaled(10)}px;
+                    padding: {ZoomManager.scaled(10)}px {ZoomManager.scaled(20)}px;
+                }}
+                QPushButton:hover {{
+                    background-color: {THEME['secondary_hover']};
+                }}
+            """)
+            self.close_dialog_btn.clicked.connect(self.close)
+            footer_layout.addWidget(self.close_dialog_btn)
+        
+        layout.addWidget(footer_frame)
+        
+    def _update_close_btn_style(self):
+        """Обновление стиля кнопки закрытия с учетом масштаба"""
+        self.close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {THEME['text_secondary']};
+                font-size: {ZoomManager.scaled(18)}px;
+                border: none;
+            }}
+            QPushButton:hover {{ 
+                color: {THEME['text_primary']}; 
+                background-color: {THEME['secondary_hover']};
+                border-radius: {ZoomManager.scaled(15)}px;
+            }}
+        """)
+        
+    def _update_clear_btn_style(self):
+        """Обновление стиля кнопки очистки с учетом масштаба"""
+        self.clear_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {THEME['secondary_bg']};
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: {ZoomManager.scaled(10)}px;
+                padding: {ZoomManager.scaled(10)}px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+            }}
+        """)
+        
+    def update_ui_scale(self):
+        """Обновление интерфейса при изменении масштаба"""
+        # Обновляем размеры окна
+        self.setMinimumWidth(ZoomManager.scaled(320))
+        if self.width() > 0:
+            self.resize(ZoomManager.scaled(320), ZoomManager.scaled(400))
+        
+        # Обновляем отступы основного лейаута
+        main_layout = self.layout()
+        if main_layout:
+            main_layout.setContentsMargins(
+                ZoomManager.scaled(15), 
+                ZoomManager.scaled(15), 
+                ZoomManager.scaled(15), 
+                ZoomManager.scaled(15)
+            )
+        
+        # Обновляем стиль контейнера
+        self._update_container_style()
+        
+        # Обновляем заголовок
+        if hasattr(self, 'title'):
+            self.title.setFont(ZoomManager.font("Segoe UI", 16, QFont.Bold))
+        
+        # Обновляем отступы заголовка
+        container_layout = self.container.layout()
+        if container_layout and container_layout.count() > 0:
+            header_frame = container_layout.itemAt(0).widget()
+            if header_frame:
+                header_layout = header_frame.layout()
+                if header_layout:
+                    header_layout.setContentsMargins(
+                        ZoomManager.scaled(20), 
+                        ZoomManager.scaled(20), 
+                        ZoomManager.scaled(20), 
+                        ZoomManager.scaled(10)
+                    )
+        
+        # Обновляем кнопку закрытия
+        if hasattr(self, 'close_btn'):
+            self.close_btn.setFixedSize(ZoomManager.scaled(30), ZoomManager.scaled(30))
+            self._update_close_btn_style()
+        
+        # Обновляем отступы контента
+        if hasattr(self, 'content_layout'):
+            self.content_layout.setSpacing(ZoomManager.scaled(10))
+            self.content_layout.setContentsMargins(
+                ZoomManager.scaled(20), 
+                0, 
+                ZoomManager.scaled(20), 
+                ZoomManager.scaled(10)
+            )
+        
+        # Обновляем элементы задач
+        for item, t_title, t_date, task in self.task_items:
+            item.setStyleSheet(f"""
+                QFrame {{
+                    background: {THEME['card_bg']};
+                    border-radius: {ZoomManager.scaled(10)}px;
+                    border: 1px solid {THEME['border_color']};
+                }}
+                QFrame:hover {{
+                    background: {THEME['card_bg_hover']};
+                    border: 1px solid {THEME.get('accent_hover', THEME['border_color'])};
+                }}
+            """)
+            item_layout = item.layout()
+            if item_layout:
+                item_layout.setContentsMargins(
+                    ZoomManager.scaled(15), 
+                    ZoomManager.scaled(10), 
+                    ZoomManager.scaled(15), 
+                    ZoomManager.scaled(10)
+                )
+            t_title.setFont(QFont("Segoe UI", 10, QFont.Medium))
+            t_date.setFont(QFont("Segoe UI", 8))
+        
+        # Обновляем кнопку очистки
+        if hasattr(self, 'clear_btn'):
+            self.clear_btn.setFont(ZoomManager.font("Segoe UI", 10))
+            self._update_clear_btn_style()
+        
+        # Обновляем отступы футера
+        footer_frame = self.container.layout().itemAt(self.container.layout().count() - 1).widget()
+        if footer_frame:
+            footer_layout = footer_frame.layout()
+            if footer_layout:
+                footer_layout.setContentsMargins(
+                    ZoomManager.scaled(20), 
+                    ZoomManager.scaled(10), 
+                    ZoomManager.scaled(20), 
+                    ZoomManager.scaled(20)
+                )
+        
+    def _open_task(self, task):
+        """Открыть задачу в диалоге просмотра"""
+        dialog = TaskViewDialog(task, self.parent_window)
+        dialog.exec()
+    
+    def _clear_and_close(self):
+        # Очищаем уведомления в родительском окне
+        if self.parent_window:
+            self.parent_window.clear_notifications()
+        
+        # Очищаем список задач в этом окне
+        # Удаляем все элементы задач
+        for item, t_title, t_date, task in self.task_items:
+            item.setParent(None)
+            item.deleteLater()
+        self.task_items.clear()
+        
+        # Очищаем layout
+        while self.content_layout.count():
+            item = self.content_layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+                item.widget().deleteLater()
+        
+        # Показываем сообщение "нет уведомлений"
+        no_notifications_label = QLabel("✅ У вас нет уведомлений")
+        no_notifications_label.setFont(ZoomManager.font("Segoe UI", 14))
+        no_notifications_label.setStyleSheet(f"""
+            color: {THEME['text_secondary']};
+            background: transparent;
+            border: none;
+            padding: {ZoomManager.scaled(20)}px;
+        """)
+        no_notifications_label.setAlignment(Qt.AlignCenter)
+        self.content_layout.addWidget(no_notifications_label)
+        
+        # Обновляем заголовок
+        if hasattr(self, 'title'):
+            self.title.setText("🔔 Уведомления")
+        
+        # Обновляем кнопку - меняем текст на "Закрыть" и меняем обработчик
+        if hasattr(self, 'clear_btn'):
+            self.clear_btn.setText("Закрыть")
+            self.clear_btn.clicked.disconnect()
+            self.clear_btn.clicked.connect(self.close)
+            # Обновляем стиль кнопки
+            self.clear_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {THEME['secondary_bg']};
+                    color: {THEME['text_primary']};
+                    border: 1px solid {THEME['border_color']};
+                    border-radius: {ZoomManager.scaled(10)}px;
+                    padding: {ZoomManager.scaled(10)}px {ZoomManager.scaled(20)}px;
+                }}
+                QPushButton:hover {{
+                    background-color: {THEME['secondary_hover']};
+                }}
+            """)
+        
+        # Обновляем список просроченных задач в диалоге
+        self.overdue_tasks = []
+    
+    def eventFilter(self, obj, event):
+        """Отслеживание перемещения главного окна для обновления позиции диалога"""
+        if obj == self.parent_window and event.type() == QEvent.Move:
+            # Обновляем позицию диалога при перемещении главного окна
+            self._update_position()
+        return super().eventFilter(obj, event)
+    
+    def _update_position(self):
+        """Обновление позиции диалога относительно кнопки уведомлений"""
+        if not hasattr(self.parent_window, 'notification_btn'):
+            return
+        
+        btn_pos = self.parent_window.notification_btn.mapToGlobal(QPoint(0, 0))
+        btn_width = self.parent_window.notification_btn.width()
+        btn_height = self.parent_window.notification_btn.height()
+        
+        # Позиционируем диалог: выравниваем правый край диалога с правым краем кнопки
+        x = btn_pos.x() + btn_width - self.width()
+        y = btn_pos.y() + btn_height  # Прямо под кнопкой
+        
+        # Проверяем границы экрана
+        screen_geo = self.screen().geometry()
+        if x + self.width() > screen_geo.right():
+            x = btn_pos.x()  # Выравниваем по левому краю кнопки
+        if x < screen_geo.left():
+            x = screen_geo.left() + ZoomManager.scaled(10)
+        if y + self.height() > screen_geo.bottom():
+            y = btn_pos.y() - self.height()  # Показываем сверху кнопки
+        if y < screen_geo.top():
+            y = screen_geo.top() + ZoomManager.scaled(10)
+        
+        self.move(x, y)
 
 class AboutDialog(DraggableDialog):
     """Диалог с информацией о проекте и обновлениях"""
@@ -1576,7 +2701,7 @@ class AboutDialog(DraggableDialog):
         project_title.setTextInteractionFlags(Qt.NoTextInteraction)
         project_layout.addWidget(project_title)
         
-        version_label = QLabel("Версия 1.0.1")
+        version_label = QLabel("Версия 1.0.2")
         version_label.setFont(QFont("Segoe UI", 11))
         version_label.setStyleSheet(f"color: {THEME['text_secondary']}; border: none; background: transparent;")
         version_label.setTextInteractionFlags(Qt.NoTextInteraction)
@@ -1782,6 +2907,44 @@ class TaskViewDialog(DraggableDialog):
         status_label.setAttribute(Qt.WA_TransparentForMouseEvents, False)
         info_layout.addWidget(status_label)
         
+        # Срок выполнения (если есть)
+        if self.task.due_date:
+            try:
+                task_date = QDate.fromString(self.task.due_date, "yyyy-MM-dd")
+                today = QDate.currentDate()
+                
+                if task_date == today.addDays(1):
+                    date_text = "Завтра"
+                    date_color = THEME['text_secondary']
+                elif task_date < today:
+                    date_text = f"Просрочено ({task_date.toString('dd.MM')})"
+                    date_color = "#ff6b6b"  # Red
+                else:
+                    # Показываем дату в формате dd.MM
+                    date_text = task_date.toString("dd.MM")
+                    date_color = THEME['text_secondary']
+                
+                due_date_label = QLabel(f"📅 Срок выполнения: {date_text}")
+                due_date_label.setFont(QFont("Segoe UI", 11))
+                due_date_label.setStyleSheet(f"color: {date_color}; background: transparent; border: none; outline: none;")
+                due_date_label.setTextInteractionFlags(Qt.NoTextInteraction)
+                due_date_label.setFocusPolicy(Qt.NoFocus)
+                due_date_label.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+                info_layout.addWidget(due_date_label)
+            except:
+                pass
+        
+        # Теги (если есть)
+        if hasattr(self.task, 'tags') and self.task.tags:
+            tags_label = QLabel("🏷️ Теги: " + ", ".join(self.task.tags))
+            tags_label.setFont(QFont("Segoe UI", 10))
+            tags_label.setStyleSheet(f"color: {THEME['text_secondary']}; background: transparent; border: none; outline: none;")
+            tags_label.setTextInteractionFlags(Qt.NoTextInteraction)
+            tags_label.setFocusPolicy(Qt.NoFocus)
+            tags_label.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+            tags_label.setWordWrap(True)
+            info_layout.addWidget(tags_label)
+        
         # Описание (если есть)
         if self.task.description:
             desc_label = QLabel("Описание задачи:")
@@ -1952,32 +3115,16 @@ class TaskCard(QFrame):
         self.priority_label.setTextInteractionFlags(Qt.NoTextInteraction)
         info_layout.addWidget(self.priority_label)
         
-        # Индикатор даты (если есть)
-        if self.task.due_date:
-            try:
-                task_date = QDate.fromString(self.task.due_date, "yyyy-MM-dd")
-                today = QDate.currentDate()
-                
-                if task_date == today:
-                    date_text = "Сегодня"
-                    date_color = THEME['text_secondary']
-                elif task_date == today.addDays(1):
-                    date_text = "Завтра"
-                    date_color = THEME['text_secondary']
-                elif task_date < today:
-                    date_text = f"Просрочено ({task_date.toString('dd.MM')})"
-                    date_color = "#ff6b6b" # Red
-                else:
-                    date_text = task_date.toString("dd.MM")
-                    date_color = THEME['text_secondary']
-                    
-                self.date_label = QLabel(f"📅 {date_text}")
-                self.date_label.setFont(QFont("Segoe UI", 8))
-                self.date_label.setStyleSheet(f"color: {date_color};")
-                self.date_label.setTextInteractionFlags(Qt.NoTextInteraction)
-                info_layout.addWidget(self.date_label)
-            except:
-                pass
+        # Индикатор даты убран из карточки - теперь показывается только в диалоге описания
+        
+        # Теги (если есть)
+        if hasattr(self.task, 'tags') and self.task.tags:
+            tags_text = " ".join([f"🏷️ {tag}" for tag in self.task.tags])
+            tags_label = QLabel(tags_text)
+            tags_label.setFont(QFont("Segoe UI", 9))
+            tags_label.setStyleSheet(f"color: {THEME['text_tertiary']};")
+            tags_label.setTextInteractionFlags(Qt.NoTextInteraction)
+            info_layout.addWidget(tags_label)
         
         # Дата выполнения (для архива)
         if self.task.status == "Выполнено" and self.task.completion_date:
@@ -2366,8 +3513,6 @@ class TaskCard(QFrame):
             self.repeat_label.setFont(ZoomManager.font("Segoe UI", 9))
         if hasattr(self, 'priority_label') and self.priority_label:
             self.priority_label.setFont(ZoomManager.font("Segoe UI", 8))
-        if hasattr(self, 'date_label') and self.date_label:
-            self.date_label.setFont(ZoomManager.font("Segoe UI", 8))
         if hasattr(self, 'time_label'):
             self.time_label.setFont(ZoomManager.font("Consolas", 10))
     
@@ -2596,6 +3741,13 @@ class DownloadThread(QThread):
                             self.progress.emit(percent)
             
             self.finished.emit(self.dest_path)
+        except (FileNotFoundError, OSError) as e:
+            # Ошибки, связанные с отсутствием файлов PyInstaller
+            error_msg = str(e)
+            if 'base_library.zip' in error_msg or '_MEI' in error_msg:
+                self.finished.emit("ERROR: Не удалось загрузить обновление. Пожалуйста, скачайте обновление вручную с GitHub.")
+            else:
+                self.finished.emit(f"ERROR: {str(e)}")
         except Exception as e:
             self.finished.emit(f"ERROR: {str(e)}")
 
@@ -2645,7 +3797,7 @@ class UpdateDialog(QDialog):
                 border: 1px solid {THEME['border_color']};
                 border-radius: 5px;
                 text-align: center;
-                color: white;
+                color: {THEME['text_primary']};
                 height: 20px;
             }}
             QProgressBar::chunk {{
@@ -3321,7 +4473,10 @@ class ModernTaskManager(QMainWindow):
         self.selected_date = QDate.currentDate() # Текущая выбранная дата
         self.update_available = False  # Флаг доступности обновления
         self.current_filter = "all"    # Текущий фильтр задач
+        self.current_tag_filter = None  # Текущий фильтр по тегу (None = все теги)
         self._initial_resize_done = False # Флаг для предотвращения авторесайза после старта
+        self.notifications_dismissed = False  # Флаг: пользователь закрыл уведомления
+        self.overdue_tasks: List[Task] = []  # Список просроченных задач
         
         # Таймер для трекинга времени
         self.timer = QTimer(self)
@@ -3678,6 +4833,12 @@ class ModernTaskManager(QMainWindow):
         
 
         
+        # Кнопка уведомлений
+        self.notification_btn = NotificationButton()
+        self.notification_btn.clicked.connect(self._show_notifications)
+        # Кнопка всегда видна, но badge показывается только при наличии просроченных задач
+        header_layout.addWidget(self.notification_btn)
+        
         # Кнопка сворачивания
         self.minimize_btn = MinimizeButton()
         self.minimize_btn.setFixedSize(32, 32)
@@ -3983,6 +5144,27 @@ class ModernTaskManager(QMainWindow):
         sep.setStyleSheet(f"background-color: {THEME['border_color']}; border: none;")
         tools_layout.addWidget(sep)
         
+        # Кнопка управления тегами
+        self.tags_btn = QPushButton("🏷️")
+        self.tags_btn.setFixedSize(32, 32)
+        self.tags_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.tags_btn.setToolTip("Управление тегами")
+        self.tags_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {THEME['text_primary']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 6px;
+                font-size: 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME['secondary_hover']};
+                border-color: {THEME['accent_hover']};
+            }}
+        """)
+        self.tags_btn.clicked.connect(self._show_tags_manager)
+        tools_layout.addWidget(self.tags_btn)
+        
         # Кнопка минималистичного режима
         self.minimal_mode_btn = QPushButton("≡")
         self.minimal_mode_btn.setCursor(QCursor(Qt.PointingHandCursor))
@@ -4174,12 +5356,15 @@ class ModernTaskManager(QMainWindow):
         # Добавляем контейнер инструментов в нижнюю панель (сразу за кнопкой)
         bottom_layout.addWidget(self.tools_container)
         
-        # Кнопка выполненных задач (справа)
+        # Кнопка выполненных задач (справа, принимает drop перетаскиваемых задач)
         self.completed_tasks_btn = QPushButton()
         self.completed_tasks_btn.setFixedSize(32, 32)
         self.completed_tasks_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.completed_tasks_btn.setToolTip("Архив задач")
         self.completed_tasks_btn.clicked.connect(self._open_completed_tasks_dialog)
+        # Разрешаем drop на кнопку и обрабатываем его через eventFilter
+        self.completed_tasks_btn.setAcceptDrops(True)
+        self.completed_tasks_btn.installEventFilter(self)
         self._update_completed_btn_style()
         bottom_layout.addWidget(self.completed_tasks_btn)
         
@@ -4242,6 +5427,75 @@ class ModernTaskManager(QMainWindow):
         dialog = TimeReportDialog(self)
         dialog.exec()
 
+    def _show_tags_manager(self):
+        """Показать диалог управления тегами с фильтрацией"""
+        # Получаем все уникальные теги из задач
+        all_tags = set()
+        for task in self.tasks:
+            if hasattr(task, 'tags') and task.tags:
+                all_tags.update(task.tags)
+        
+        if not all_tags:
+            QMessageBox.information(self, "Теги", "У вас пока нет тегов. Добавьте теги к задачам через диалог редактирования.")
+            return
+        
+        # Создаем меню с тегами для фильтрации
+        from PySide6.QtWidgets import QMenu
+        from PySide6.QtGui import QAction
+        
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {THEME['card_bg']};
+                border: 1px solid {THEME['border_color']};
+                border-radius: 8px;
+                padding: 4px;
+            }}
+            QMenu::item {{
+                padding: 8px 16px;
+                border-radius: 4px;
+                color: {THEME['text_primary']};
+            }}
+            QMenu::item:selected {{
+                background-color: {THEME['accent_bg']};
+                color: {THEME['accent_text']};
+            }}
+        """)
+        
+        # Опция "Все теги"
+        all_action = QAction("🔘 Все теги", self)
+        all_action.setCheckable(True)
+        all_action.setChecked(self.current_tag_filter is None)
+        all_action.triggered.connect(lambda: self._set_tag_filter(None))
+        menu.addAction(all_action)
+        
+        menu.addSeparator()
+        
+        # Опции для каждого тега
+        for tag in sorted(all_tags):
+            action = QAction(f"🏷️ {tag}", self)
+            action.setCheckable(True)
+            action.setChecked(self.current_tag_filter == tag)
+            action.triggered.connect(lambda checked, t=tag: self._set_tag_filter(t))
+            menu.addAction(action)
+        
+        # Показываем меню над кнопкой
+        menu.adjustSize()  # Подгоняем размер меню
+        btn_pos = self.tags_btn.mapToGlobal(QPoint(0, 0))
+        menu_pos = QPoint(btn_pos.x(), btn_pos.y() - menu.height() - 4)
+        
+        # Проверка границ экрана
+        screen_geo = self.screen().geometry()
+        if menu_pos.y() < screen_geo.top():
+            menu_pos.setY(btn_pos.y() + self.tags_btn.height() + 4)  # Если не помещается вверху, показываем внизу
+        
+        menu.exec(menu_pos)
+    
+    def _set_tag_filter(self, tag):
+        """Установка фильтра по тегу"""
+        self.current_tag_filter = tag
+        self._refresh_tasks()
+    
     def _show_zoom_slider(self):
         """Показать вертикальный слайдер масштаба"""
         # Текущий масштаб
@@ -4318,12 +5572,30 @@ class ModernTaskManager(QMainWindow):
             event.accept()
     
     def eventFilter(self, obj, event):
-        """Фильтр событий для обновления позиции grip"""
-        if obj == self.grip_container and event.type() == event.Type.Resize:
+        """Фильтр событий: позиция grip и drop на кнопку выполненных задач"""
+        # Обновление позиции grip внизу окна
+        if hasattr(self, 'grip_container') and obj == self.grip_container and event.type() == event.Type.Resize:
             if hasattr(self, 'grip_wrapper'):
                 # Размер кнопки 24x24, отступы контейнера 20px, позиционируем: ширина - отступ - размер кнопки
                 self.grip_wrapper.move(obj.width() - 44, obj.height() - 44)
                 self.grip_wrapper.raise_()
+
+        # Поддержка drag&drop задач на кнопку выполненных задач
+        if hasattr(self, 'completed_tasks_btn') and obj == self.completed_tasks_btn:
+            # При наведении с drag принимаем событие (если в mime есть id задачи)
+            if event.type() in (QEvent.DragEnter, QEvent.DragMove):
+                if event.mimeData().hasText():
+                    event.acceptProposedAction()
+                    return True
+            # Обработка сброса задачи на кнопку
+            if event.type() == QEvent.Drop:
+                if event.mimeData().hasText():
+                    task_id = event.mimeData().text()
+                    # Переносим задачу в выполненные
+                    self.change_task_status_by_id(task_id, "Выполнено")
+                    event.acceptProposedAction()
+                    return True
+
         return super().eventFilter(obj, event)
     
     def showEvent(self, event):
@@ -4397,6 +5669,10 @@ class ModernTaskManager(QMainWindow):
         if self.current_filter in ["high", "medium", "low"]:
             active_tasks = [t for t in active_tasks if t.priority == self.current_filter]
         
+        # Фильтрация по тегам
+        if self.current_tag_filter:
+            active_tasks = [t for t in active_tasks if hasattr(t, 'tags') and t.tags and self.current_tag_filter in t.tags]
+        
         # Сортировка активных по приоритету
         priority_map = {"high": 0, "medium": 1, "low": 2}
         active_tasks.sort(key=lambda t: priority_map.get(t.priority, 3))
@@ -4412,6 +5688,12 @@ class ModernTaskManager(QMainWindow):
              
         # Обновление иконки выполненных задач
         self._update_completed_btn_icon(len(completed_tasks))
+        
+        # Обновляем стиль кнопки выполненных задач
+        self._update_completed_btn_style()
+        
+        # Обновляем уведомления
+        self._check_overdue_tasks()
         
         # Обновление счетчиков
         total = len(filtered_tasks)
@@ -4708,7 +5990,8 @@ class ModernTaskManager(QMainWindow):
                 due_date=data["due_date"],
                 created=datetime.now().strftime("%d.%m.%Y %H:%M"),
                 repeat_type=data.get("repeat_type"),
-                last_repeated_date=None
+                last_repeated_date=None,
+                tags=data.get("tags", [])
             )
             
             self.tasks.append(task)
@@ -4762,6 +6045,7 @@ class ModernTaskManager(QMainWindow):
                     t.priority = data["priority"]
                     t.due_date = data["due_date"]
                     t.repeat_type = data.get("repeat_type")
+                    t.tags = data.get("tags", [])
                     break
             
             TaskStorage.save(self.tasks)
@@ -4772,7 +6056,93 @@ class ModernTaskManager(QMainWindow):
         scale = value / 100.0
         ZoomManager.set_scale(scale)
         self._refresh_ui_scale()
+        self._check_overdue_tasks()
+    
+    def _check_overdue_tasks(self):
+        """Проверка просроченных задач и обновление иконки"""
+        today = QDate.currentDate()
+        old_overdue_ids = {task.id for task in self.overdue_tasks}  # Сохраняем старые ID
+        self.overdue_tasks = []
         
+        for task in self.tasks:
+            # Проверяем только активные задачи
+            if task.status != "completed" and task.due_date:
+                try:
+                    due = QDate.fromString(task.due_date, "yyyy-MM-dd")
+                    if due < today:
+                        self.overdue_tasks.append(task)
+                except:
+                    pass
+        
+        # Если появились новые просроченные задачи (которых не было в старом списке), сбрасываем флаг
+        new_overdue_ids = {task.id for task in self.overdue_tasks}
+        if new_overdue_ids - old_overdue_ids:  # Есть новые задачи
+            self.notifications_dismissed = False
+                    
+        has_overdue = len(self.overdue_tasks) > 0 and not self.notifications_dismissed
+        
+        if hasattr(self, 'notification_btn'):
+            # Кнопка всегда видна, но badge показывается только при наличии просроченных задач и если не закрыты
+            self.notification_btn.set_notification_state(has_overdue)
+            # Принудительное обновление для немедленного отображения изменений
+            self.notification_btn.update()
+    
+    def _show_notifications(self):
+        """Показать диалог уведомлений"""
+        # Если уведомления были очищены пользователем, показываем пустой список
+        # (уведомления появятся только при следующем запуске программы)
+        if self.notifications_dismissed:
+            tasks_to_show = []
+        else:
+            tasks_to_show = self.overdue_tasks
+        
+        # Всегда показываем диалог, даже если уведомлений нет
+        dialog = NotificationDialog(self, tasks_to_show)
+        
+        # Позиционируем диалог точно под кнопкой уведомлений (прилипает к иконке)
+        if hasattr(self, 'notification_btn'):
+            dialog.adjustSize()
+            # Получаем глобальную позицию кнопки
+            btn_pos = self.notification_btn.mapToGlobal(QPoint(0, 0))
+            btn_width = self.notification_btn.width()
+            btn_height = self.notification_btn.height()
+            
+            # Позиционируем диалог: выравниваем правый край диалога с правым краем кнопки
+            # и размещаем сразу под кнопкой (без отступа или с минимальным)
+            x = btn_pos.x() + btn_width - dialog.width()
+            y = btn_pos.y() + btn_height  # Прямо под кнопкой, без отступа
+            
+            # Проверяем, чтобы диалог не выходил за границы экрана
+            screen_geo = self.screen().geometry()
+            
+            # Если диалог выходит за правый край экрана, выравниваем по левому краю кнопки
+            if x + dialog.width() > screen_geo.right():
+                x = btn_pos.x()  # Выравниваем по левому краю кнопки
+            if x < screen_geo.left():
+                x = screen_geo.left() + ZoomManager.scaled(10)
+            
+            # Если диалог не помещается снизу, показываем сверху кнопки
+            if y + dialog.height() > screen_geo.bottom():
+                y = btn_pos.y() - dialog.height()  # Показываем сверху кнопки
+            if y < screen_geo.top():
+                y = screen_geo.top() + ZoomManager.scaled(10)
+            
+            dialog.move(x, y)
+        
+        dialog.exec()
+        
+    def clear_notifications(self):
+        """Очистить уведомления (скрыть до следующего запуска/обновления)"""
+        # Устанавливаем флаг, что пользователь закрыл уведомления
+        self.notifications_dismissed = True
+        # Обновляем состояние кнопки (убираем badge) - принудительно
+        if hasattr(self, 'notification_btn'):
+            # Прямо устанавливаем флаг и обновляем
+            self.notification_btn.has_notifications = False
+            self.notification_btn.update()
+            # Дополнительно вызываем set_notification_state для гарантии
+            self.notification_btn.set_notification_state(False)
+             
     def _refresh_ui_scale(self):
         """Обновление UI при изменении масштаба"""
         # Обновляем отступы макетов
@@ -5013,6 +6383,38 @@ class ModernTaskManager(QMainWindow):
                     """)
                     msg.exec()
                     
+        except (FileNotFoundError, OSError) as e:
+            # Ошибки, связанные с отсутствием файлов PyInstaller (base_library.zip и т.д.)
+            progress.close()
+            error_msg = str(e)
+            if 'base_library.zip' in error_msg or '_MEI' in error_msg:
+                # Это ошибка PyInstaller - просто игнорируем проверку обновлений
+                msg = QMessageBox(self)
+                msg.setWindowTitle("TaskMaster")
+                msg.setText("Проверка обновлений временно недоступна")
+                msg.setInformativeText("Приложение работает в режиме без проверки обновлений.")
+                msg.setIcon(QMessageBox.Warning)
+                msg.setStyleSheet(f"""
+                    QMessageBox {{
+                        background-color: {THEME['window_bg_end']};
+                        color: {THEME['text_primary']};
+                    }}
+                """)
+                msg.exec()
+            else:
+                # Другая ошибка файловой системы
+                msg = QMessageBox(self)
+                msg.setWindowTitle("Ошибка")
+                msg.setText("Не удалось проверить обновления")
+                msg.setInformativeText(f"Ошибка: {error_msg}")
+                msg.setIcon(QMessageBox.Critical)
+                msg.setStyleSheet(f"""
+                    QMessageBox {{
+                        background-color: {THEME['window_bg_end']};
+                        color: {THEME['text_primary']};
+                    }}
+                """)
+                msg.exec()
         except urllib.error.HTTPError as e:
             progress.close()
             
@@ -5114,6 +6516,13 @@ class ModernTaskManager(QMainWindow):
                     else:
                         print("No update available.")
                         self.update_found.emit(False)
+            except (FileNotFoundError, OSError) as e:
+                # Ошибки, связанные с отсутствием файлов PyInstaller - просто игнорируем
+                error_msg = str(e)
+                if 'base_library.zip' in error_msg or '_MEI' in error_msg:
+                    print("Update check skipped: PyInstaller files not found (running from exe)")
+                else:
+                    print(f"Background update check failed (file system error): {e}")
             except Exception as e:
                 print(f"Background update check failed: {e}")
         
@@ -5521,6 +6930,12 @@ class ModernTaskManager(QMainWindow):
         QApplication.instance().setStyleSheet(get_global_style() + tooltip_style)
         self.setStyleSheet(self.styleSheet() + tooltip_style)
         
+        # Обновляем кнопки закрытия и сворачивания (они используют paintEvent)
+        for btn in self.findChildren(CloseButton):
+            btn.update()
+        for btn in self.findChildren(MinimizeButton):
+            btn.update()
+        
         # КРИТИЧЕСКИ ВАЖНО: Применяем новые стили полей ввода с цветами из текущей темы
         input_style = get_input_field_style()
         for widget in self.findChildren(QLineEdit):
@@ -5543,7 +6958,7 @@ class ModernTaskManager(QMainWindow):
             self.update_badge.setStyleSheet(f"""
                 QLabel {{
                     background-color: #ff4444;
-                    border: 2px solid #ffffff;
+                    border: 2px solid {THEME['window_bg_end']};
                     border-radius: 6px;
                 }}
             """)
